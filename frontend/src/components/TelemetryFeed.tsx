@@ -2,18 +2,19 @@
 
 import React, { useState } from "react";
 import { useNOCStore } from "@/store/useNOCStore";
-import { ParsedTelemetry, SeverityLevel, VendorPlatform } from "@/types/vat";
+import { ParsedTelemetry, SeverityLevel } from "@/types/vat";
 import {
   AlertTriangle,
   ArrowRight,
-  CheckCircle2,
   Filter,
   Flame,
+  Inbox,
   Plus,
   Radio,
   Search,
   Send,
   Terminal,
+  Zap,
 } from "lucide-react";
 
 export function TelemetryFeed() {
@@ -27,17 +28,22 @@ export function TelemetryFeed() {
   const searchQuery = useNOCStore((state) => state.searchQuery);
   const setSearchQuery = useNOCStore((state) => state.setSearchQuery);
   const troubleshootIncident = useNOCStore((state) => state.troubleshootIncident);
+  const loadDemoFixtures = useNOCStore((state) => state.loadDemoFixtures);
 
   const [customLogInput, setCustomLogInput] = useState("");
-  const [customDevice, setCustomDevice] = useState("Border-RT-01");
+  const [customDevice, setCustomDevice] = useState("");
   const [showIngestBox, setShowIngestBox] = useState(false);
 
   const handleManualIngest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customLogInput.trim()) return;
 
-    await troubleshootIncident(customLogInput, customDevice);
+    await troubleshootIncident(
+      customLogInput,
+      customDevice.trim() ? customDevice.trim() : undefined
+    );
     setCustomLogInput("");
+    setCustomDevice("");
     setShowIngestBox(false);
   };
 
@@ -101,7 +107,7 @@ export function TelemetryFeed() {
         <button
           onClick={() => setShowIngestBox(!showIngestBox)}
           className="text-xs bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300 p-1.5 rounded border border-obsidian-700 flex items-center space-x-1"
-          title="Paste Custom Telemetry"
+          title="Submit Live Raw Telemetry"
         >
           <Plus className="w-3.5 h-3.5" />
           <span className="text-[10px] font-mono">INGEST</span>
@@ -114,7 +120,7 @@ export function TelemetryFeed() {
           <div className="flex items-center space-x-2">
             <input
               type="text"
-              placeholder="Device ID (e.g. Core-RT-01)"
+              placeholder="Device ID (optional, e.g. Core-RT-01)"
               value={customDevice}
               onChange={(e) => setCustomDevice(e.target.value)}
               className="text-xs bg-obsidian-900 border border-obsidian-700 rounded px-2 py-1 text-white font-mono w-full focus:outline-none focus:border-brand-sky"
@@ -122,7 +128,7 @@ export function TelemetryFeed() {
           </div>
           <textarea
             rows={3}
-            placeholder="Paste raw syslog or telemetry event..."
+            placeholder="Paste raw carrier syslog (e.g. Cisco BGP, Juniper Junos, SD-WAN, Arista)..."
             value={customLogInput}
             onChange={(e) => setCustomLogInput(e.target.value)}
             className="text-xs bg-obsidian-900 border border-obsidian-700 rounded p-2 text-white font-mono w-full focus:outline-none focus:border-brand-sky"
@@ -182,8 +188,21 @@ export function TelemetryFeed() {
       {/* Live Stream List */}
       <div className="flex-1 overflow-y-auto divide-y divide-obsidian-800/80 p-2 space-y-2">
         {filteredLogs.length === 0 ? (
-          <div className="p-8 text-center text-obsidian-500 font-mono text-xs">
-            No telemetry matching active filters.
+          <div className="h-full flex flex-col items-center justify-center p-6 text-center text-obsidian-500 font-mono text-xs space-y-3">
+            <Inbox className="w-8 h-8 text-obsidian-700" />
+            <div className="font-semibold text-obsidian-300">
+              Live Stream Awaiting Telemetry
+            </div>
+            <p className="text-[11px] text-obsidian-500 max-w-xs leading-relaxed">
+              No telemetry received yet. Stream live multi-vendor syslogs via WebSocket (<code>/ws/telemetry</code>) or click <b>INGEST</b> above to submit a live event.
+            </p>
+            <button
+              onClick={loadDemoFixtures}
+              className="mt-2 text-[10px] bg-obsidian-850 hover:bg-obsidian-800 text-amber-300 border border-amber-800/50 px-2.5 py-1 rounded flex items-center space-x-1"
+            >
+              <Zap className="w-3 h-3 text-amber-400" />
+              <span>Load QA Demo Fixtures</span>
+            </button>
           </div>
         ) : (
           filteredLogs.map((item, idx) => {

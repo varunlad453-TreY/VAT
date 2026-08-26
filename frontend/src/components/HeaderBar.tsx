@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useNOCStore } from "@/store/useNOCStore";
 import {
   Activity,
@@ -12,6 +12,7 @@ import {
   Server,
   ShieldAlert,
   Terminal,
+  Zap,
 } from "lucide-react";
 
 interface HeaderBarProps {
@@ -20,9 +21,14 @@ interface HeaderBarProps {
 
 export function HeaderBar({ onOpenAudit }: HeaderBarProps) {
   const wsConnected = useNOCStore((state) => state.wsConnected);
+  const health = useNOCStore((state) => state.health);
   const activeRunbook = useNOCStore((state) => state.activeRunbook);
   const telemetryCount = useNOCStore((state) => state.telemetryFeed.length);
-  const loadInitialSampleData = useNOCStore((state) => state.loadInitialSampleData);
+  const isDemoMode = useNOCStore((state) => state.isDemoMode);
+  const loadDemoFixtures = useNOCStore((state) => state.loadDemoFixtures);
+  const clearFeed = useNOCStore((state) => state.clearFeed);
+
+  const isDbConnected = health?.database_connected ?? false;
 
   return (
     <header className="h-14 bg-obsidian-900 border-b border-obsidian-700/80 px-4 flex items-center justify-between shrink-0 select-none">
@@ -50,6 +56,19 @@ export function HeaderBar({ onOpenAudit }: HeaderBarProps) {
             </span>
           ))}
         </div>
+
+        {/* Demo Mode Visual Flag */}
+        {isDemoMode && (
+          <div className="flex items-center space-x-1 bg-amber-950/80 border border-amber-600/60 text-amber-300 text-[10px] font-mono px-2 py-0.5 rounded">
+            <span>[DEMO FIXTURES ACTIVE]</span>
+            <button
+              onClick={clearFeed}
+              className="ml-1 text-amber-200 hover:text-white underline"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Center: Real-Time Stream Status & Stats */}
@@ -60,10 +79,21 @@ export function HeaderBar({ onOpenAudit }: HeaderBarProps) {
           <span className="text-white font-bold">{telemetryCount}</span>
         </div>
 
+        {/* Dynamic Database Health State */}
         <div className="flex items-center space-x-1.5 text-obsidian-300 bg-obsidian-850 px-2.5 py-1 rounded border border-obsidian-700/60">
-          <Database className="w-3.5 h-3.5 text-brand-emerald" />
+          <Database
+            className={`w-3.5 h-3.5 ${
+              isDbConnected ? "text-brand-emerald" : "text-amber-400"
+            }`}
+          />
           <span>PGVECTOR:</span>
-          <span className="text-brand-emerald font-bold">HNSW + RRF</span>
+          <span
+            className={`font-bold ${
+              isDbConnected ? "text-brand-emerald" : "text-amber-400"
+            }`}
+          >
+            {isDbConnected ? "ONLINE (HNSW+RRF)" : "AIR-GAPPED (OFFLINE)"}
+          </span>
         </div>
 
         {activeRunbook && (
@@ -77,15 +107,15 @@ export function HeaderBar({ onOpenAudit }: HeaderBarProps) {
         )}
       </div>
 
-      {/* Right: WebSocket Liveness & Actions */}
+      {/* Right: Actions & Live WS Indicator */}
       <div className="flex items-center space-x-2.5">
         <button
-          onClick={loadInitialSampleData}
-          title="Reload Test Scenarios"
-          className="flex items-center space-x-1 text-xs font-mono bg-obsidian-800 hover:bg-obsidian-700 text-obsidian-200 px-2.5 py-1.5 rounded border border-obsidian-700 transition"
+          onClick={loadDemoFixtures}
+          title="Load Isolated QA Test Scenarios for Demonstration"
+          className="flex items-center space-x-1 text-xs font-mono bg-obsidian-800 hover:bg-obsidian-700 text-obsidian-300 px-2.5 py-1.5 rounded border border-obsidian-700 transition"
         >
-          <RefreshCw className="w-3 h-3" />
-          <span className="hidden sm:inline">RELOAD SAMPLE INCIDENTS</span>
+          <Zap className="w-3 h-3 text-amber-400" />
+          <span className="hidden sm:inline">LOAD DEMO FIXTURES</span>
         </button>
 
         <button
@@ -109,7 +139,7 @@ export function HeaderBar({ onOpenAudit }: HeaderBarProps) {
               wsConnected ? "bg-emerald-400 live-indicator" : "bg-amber-400"
             }`}
           />
-          <span>{wsConnected ? "LIVE STREAM" : "AIR-GAPPED"}</span>
+          <span>{wsConnected ? "LIVE STREAM" : "OFFLINE"}</span>
         </div>
       </div>
     </header>

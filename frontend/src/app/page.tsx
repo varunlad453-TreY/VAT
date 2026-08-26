@@ -5,11 +5,12 @@ import { SplitPaneCanvas } from "@/components/SplitPaneCanvas";
 import { useNOCStore } from "@/store/useNOCStore";
 
 export default function Home() {
-  const loadInitialSampleData = useNOCStore((state) => state.loadInitialSampleData);
+  const initDashboard = useNOCStore((state) => state.initDashboard);
 
   useEffect(() => {
-    loadInitialSampleData();
-  }, [loadInitialSampleData]);
+    // Initialize dashboard by querying real backend health & audit history
+    initDashboard();
+  }, [initDashboard]);
 
   return <SplitPaneCanvas />;
 }
