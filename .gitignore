@@ -4,6 +4,15 @@ __pycache__/
 *$py.class
 *.pyc
 
+# Node.js and Next.js
+node_modules/
+.next/
+out/
+build/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
 # Virtual environments
 venv/
 env/
@@ -12,6 +21,7 @@ env/
 # Environment and secrets
 .env
 .env.local
+frontend/.env.local
 
 # Testing and IDEs
 .pytest_cache/

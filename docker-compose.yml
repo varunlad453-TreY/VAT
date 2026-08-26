@@ -55,7 +55,7 @@ services:
     container_name: vat-backend
     restart: unless-stopped
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "${API_PORT:-8001}:8000"
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

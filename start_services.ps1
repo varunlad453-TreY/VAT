@@ -20,9 +20,9 @@ Set-Location "$PSScriptRoot\frontend"
 Write-Host "`n=================================================================" -ForegroundColor Cyan
 Write-Host " NOC CONSOLE READY:" -ForegroundColor Green
 Write-Host " • Frontend UI:       http://localhost:3000" -ForegroundColor White
-Write-Host " • Backend REST Docs: http://localhost:8000/docs" -ForegroundColor White
-Write-Host " • Health Endpoint:   http://localhost:8000/health" -ForegroundColor White
-Write-Host " • WebSocket Stream:  ws://localhost:8000/ws/telemetry" -ForegroundColor White
+Write-Host " • Backend REST Docs: http://localhost:8001/docs" -ForegroundColor White
+Write-Host " • Health Endpoint:   http://localhost:8001/health" -ForegroundColor White
+Write-Host " • WebSocket Stream:  ws://localhost:8001/ws/telemetry" -ForegroundColor White
 Write-Host "=================================================================`n" -ForegroundColor Cyan
 
 npm run dev
