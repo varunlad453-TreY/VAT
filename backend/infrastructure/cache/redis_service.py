@@ -80,15 +80,16 @@ class RedisCacheService(ICacheService):
     async def publish(self, channel: str, message: Any) -> int:
         """Publish real-time telemetry event to channel subscribers."""
         msg_str = json.dumps(message) if not isinstance(message, str) else message
+        redis_count = 0
 
         client = await self._get_client()
         if client is not None:
             try:
-                return await client.publish(channel, msg_str)
+                redis_count = await client.publish(channel, msg_str)
             except Exception as exc:
                 logger.debug("Redis publish error: %s", exc)
 
-        # In-memory notification dispatch
+        # In-memory notification dispatch (for local WebSocket listeners on this node)
         subs = self._in_memory_subscribers.get(channel, [])
         for sub in subs:
             try:
@@ -96,7 +97,7 @@ class RedisCacheService(ICacheService):
                     sub(msg_str)
             except Exception:
                 pass
-        return len(subs)
+        return max(redis_count, len(subs))
 
     async def is_healthy(self) -> bool:
         """Check if Redis cache service is reachable."""
