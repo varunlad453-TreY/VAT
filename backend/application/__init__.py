@@ -3,18 +3,23 @@ VAT Enterprise Application Layer Package
 """
 
 from backend.application.dtos import (
-    TroubleshootRequestDTO,
-    TroubleshootResponseDTO,
     ResolutionStepDTO,
     TelemetryIngestBatchRequestDTO,
     TelemetryIngestResponseDTO,
+    TroubleshootRequestDTO,
+    TroubleshootResponseDTO,
 )
 from backend.application.ports import (
-    IVectorRepository,
     IAISynthesizer,
     IAuditRepository,
-    ITelemetryParser,
     ICacheService,
+    ITelemetryParser,
+    IVectorRepository,
+)
+from backend.application.use_cases import (
+    IngestTelemetryBatchUseCase,
+    QueryVendorSourcesUseCase,
+    SynthesizeRemediationRunbookUseCase,
 )
 
 __all__ = [
@@ -28,4 +33,7 @@ __all__ = [
     "IAuditRepository",
     "ITelemetryParser",
     "ICacheService",
+    "SynthesizeRemediationRunbookUseCase",
+    "IngestTelemetryBatchUseCase",
+    "QueryVendorSourcesUseCase",
 ]

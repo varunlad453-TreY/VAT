@@ -1,5 +1,5 @@
 """
-Vendor-Aware Troubleshooting (VAT) - Main Application Server (Phase 2)
+Vendor-Aware Troubleshooting (VAT) - Main Application Server (Clean Architecture)
 """
 
 import logging
@@ -11,13 +11,15 @@ from typing import Dict
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
-from config.settings import get_settings
 from backend.database.client import db
-from backend.routes.telemetry import router as telemetry_router
-from backend.routes.troubleshoot import router as troubleshoot_router
+from backend.presentation.api.health_router import router as health_router
+from backend.presentation.api.telemetry_router import router as telemetry_router
+from backend.presentation.api.troubleshoot_router import router as troubleshoot_router
+from backend.presentation.websockets.telemetry_ws import router as ws_router
+from config.settings import get_settings
 
 # Configure Logger
 logging.basicConfig(
@@ -64,14 +66,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register API Routers
+# Register Presentation Routers (REST & WebSockets)
 app.include_router(troubleshoot_router)
 app.include_router(telemetry_router)
+app.include_router(health_router)
+app.include_router(ws_router)
 
 # Serve Console Frontend
-from fastapi.responses import FileResponse, RedirectResponse
-
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+
 
 @app.get("/console", include_in_schema=False)
 @app.get("/console/", include_in_schema=False)
@@ -82,44 +85,10 @@ async def serve_console_page():
         return FileResponse(index_file)
     return {"detail": "Console index.html not found"}
 
+
 if FRONTEND_DIR.exists():
     app.mount("/console/assets", StaticFiles(directory=str(FRONTEND_DIR)), name="console_assets")
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
-
-
-class HealthResponse(BaseModel):
-    status: str
-    service: str
-    database_connected: bool
-    version: str
-    timestamp: datetime
-
-
-@app.get("/health", response_model=HealthResponse, tags=["health"])
-async def health_check() -> HealthResponse:
-    """Service health and database connectivity probe."""
-    db_ok = await db.is_connected()
-    return HealthResponse(
-        status="healthy" if db_ok else "degraded",
-        service="vendor-aware-troubleshooter-enterprise",
-        database_connected=db_ok,
-        version="2.0.0",
-        timestamp=datetime.now(timezone.utc),
-    )
-
-
-@app.get("/", tags=["health"])
-async def root() -> Dict[str, str]:
-    """Root metadata endpoint."""
-    return {
-        "service": "Vendor-Aware AI Troubleshooter (VAT Enterprise)",
-        "version": "2.0.0",
-        "docs_url": "/docs",
-        "health_url": "/health",
-        "console_url": "/console",
-        "troubleshoot_url": "/troubleshoot",
-        "telemetry_url": "/telemetry/ingest",
-    }
 
 
 if __name__ == "__main__":
