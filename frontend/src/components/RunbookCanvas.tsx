@@ -2,22 +2,16 @@
 
 import React, { useState } from "react";
 import { useNOCStore } from "@/store/useNOCStore";
-import { RiskLevel } from "@/types/vat";
 import {
-  Activity,
-  AlertOctagon,
-  AlertTriangle,
-  CheckCircle,
-  CheckCircle2,
-  ChevronDown,
-  ChevronRight,
-  Clock,
+  PreCheckCommand,
+  RemediationCommand,
+  PostCheckCommand,
+  RollbackCommand,
+} from "@/types/vat";
+import {
+  Check,
   Copy,
-  FileCode,
-  Layers,
-  RotateCcw,
-  Shield,
-  ShieldAlert,
+  Play,
   Terminal,
   Zap,
 } from "lucide-react";
@@ -26,295 +20,396 @@ export function RunbookCanvas() {
   const activeIncident = useNOCStore((state) => state.activeIncident);
   const activeRunbook = useNOCStore((state) => state.activeRunbook);
   const isAnalyzing = useNOCStore((state) => state.isAnalyzing);
-  const progress = useNOCStore((state) => state.progress);
+  const troubleshootIncident = useNOCStore((state) => state.troubleshootIncident);
+  const loadDemoFixtures = useNOCStore((state) => state.loadDemoFixtures);
 
-  const [copiedStep, setCopiedStep] = useState<string | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
 
-  const copyToClipboard = (text: string, identifier: string) => {
+  const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
-    setCopiedStep(identifier);
-    setTimeout(() => setCopiedStep(null), 2000);
+    setCopiedIndex(id);
+    setTimeout(() => setCopiedIndex(null), 1800);
   };
 
-  const getRiskPill = (riskLevel: RiskLevel | string) => {
-    switch (riskLevel?.toUpperCase()) {
-      case "HIGH":
-        return {
-          bg: "bg-red-950/80 text-red-300 border-red-700/60",
-          icon: <AlertOctagon className="w-3.5 h-3.5 text-red-400" />,
-          label: "HIGH BLAST RADIUS",
-        };
-      case "MEDIUM":
-        return {
-          bg: "bg-amber-950/80 text-amber-300 border-amber-700/60",
-          icon: <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />,
-          label: "MEDIUM BLAST RADIUS",
-        };
-      default:
-        return {
-          bg: "bg-emerald-950/80 text-emerald-300 border-emerald-700/60",
-          icon: <Shield className="w-3.5 h-3.5 text-emerald-400" />,
-          label: "LOW BLAST RADIUS (SAFE)",
-        };
+  if (!activeIncident) {
+    return (
+      <main className="flex-1 bg-[#05080f] flex flex-col items-center justify-center p-8 text-center select-none font-mono">
+        <div className="max-w-md space-y-4">
+          <Terminal className="w-10 h-10 text-slate-700 mx-auto" />
+          <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wider">
+            Operational Workspace Ready
+          </h2>
+          <p className="text-xs text-slate-500 leading-relaxed font-sans">
+            Select an active telemetry event from the stream on the left or ingest a raw syslog line to generate a deterministic 4-stage remediation runbook.
+          </p>
+          <button
+            onClick={loadDemoFixtures}
+            className="inline-flex items-center space-x-1.5 text-xs text-amber-400 hover:text-amber-300 underline font-mono"
+          >
+            <Zap className="w-3.5 h-3.5" />
+            <span>Load Demo Fixture Incidents</span>
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const blastRadius = activeRunbook?.risk_assessment?.blast_radius_scope || "STANDARD";
+  const downtimeSec = activeRunbook?.risk_assessment?.estimated_downtime_sec ?? 0;
+
+  const getBlastRadiusColor = (blast: string) => {
+    const b = blast.toUpperCase();
+    if (b.includes("HIGH") || b.includes("CRITICAL") || b.includes("CHASSIS") || b.includes("PAIR")) {
+      return "text-red-400";
     }
+    if (b.includes("MEDIUM") || b.includes("CORE") || b.includes("ZONE")) {
+      return "text-amber-400";
+    }
+    return "text-emerald-400";
   };
-
-  if (isAnalyzing) {
-    return (
-      <main className="flex-1 bg-obsidian-950 flex flex-col items-center justify-center p-8 font-mono space-y-4">
-        <div className="w-12 h-12 rounded-full border-2 border-brand-cyan border-t-transparent animate-spin" />
-        <div className="text-sm text-cyan-300 font-bold tracking-wider">
-          SYNTHESIZING CARRIER REMEDIATION RUNBOOK
-        </div>
-        <div className="text-xs text-obsidian-400 max-w-md text-center">
-          {progress.message || "Executing pgvector HNSW + BM25 RRF search against official TAC manuals..."}
-        </div>
-        <div className="flex items-center space-x-2 text-[11px] text-obsidian-500 pt-4">
-          <span className="animate-pulse">● STAGE: {progress.stage.toUpperCase()}</span>
-        </div>
-      </main>
-    );
-  }
-
-  if (!activeRunbook) {
-    return (
-      <main className="flex-1 bg-obsidian-950 flex flex-col items-center justify-center p-8 font-mono text-center text-obsidian-500">
-        <Terminal className="w-12 h-12 mb-3 text-obsidian-700" />
-        <div className="text-sm font-semibold text-obsidian-300 mb-1">
-          No Incident Selected
-        </div>
-        <div className="text-xs max-w-sm">
-          Select a telemetry event from the live stream or paste custom telemetry to generate a grounded 4-stage operational runbook.
-        </div>
-      </main>
-    );
-  }
-
-  const riskInfo = getRiskPill(activeRunbook.risk_assessment?.risk_level || "LOW");
 
   return (
-    <main className="flex-1 bg-obsidian-950 overflow-y-auto flex flex-col h-full">
-      {/* 1. Diagnostic Summary Card */}
-      <section className="p-4 border-b border-obsidian-800 bg-gradient-to-b from-obsidian-900 to-obsidian-950 shrink-0">
-        <div className="max-w-4xl mx-auto space-y-3">
-          {/* Top Meta Strip */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center space-x-2">
-              <span className="text-[11px] font-mono uppercase bg-blue-950 text-blue-300 px-2 py-0.5 rounded border border-blue-700/50 font-bold">
-                {activeRunbook.vendor} &bull; {activeRunbook.protocol}
+    <main className="flex-1 bg-[#05080f] flex flex-col h-full overflow-hidden select-none">
+      {/* ────────────────────────────────────────────────────────────────────────
+          1. INCIDENT DIAGNOSTIC BANNER (Flat Editorial Layout, No Metric Boxes)
+          ──────────────────────────────────────────────────────────────────────── */}
+      <div className="p-4 bg-[#080d17] border-b border-[#172236] shrink-0 space-y-3 font-mono">
+        {/* Title & Metadata Ribbon */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center space-x-2">
+            <span className="text-white font-bold tracking-wide uppercase">
+              {activeIncident.vendor}
+            </span>
+            <span className="text-slate-600">·</span>
+            {activeIncident.protocol && (
+              <>
+                <span className="text-cyan-400 uppercase font-medium">
+                  {activeIncident.protocol}
+                </span>
+                <span className="text-slate-600">·</span>
+              </>
+            )}
+            <span className="text-slate-300">HOST: {activeIncident.device_id}</span>
+            {activeIncident.peer_ip && (
+              <>
+                <span className="text-slate-600">·</span>
+                <span className="text-slate-400">PEER: {activeIncident.peer_ip}</span>
+              </>
+            )}
+          </div>
+
+          {activeRunbook && (
+            <div className="flex items-center space-x-1 font-bold text-[11px]">
+              <span className="text-slate-500">BLAST RADIUS:</span>
+              <span className={getBlastRadiusColor(blastRadius)}>
+                ● {blastRadius.toUpperCase()}
               </span>
-              <span className="text-xs font-mono text-obsidian-400">
-                HOST: <span className="text-white font-semibold">{activeRunbook.device_id || "Target-Device"}</span>
-              </span>
             </div>
-
-            {/* Risk Assessment Pill */}
-            <div
-              className={`flex items-center space-x-1.5 text-xs font-mono px-2.5 py-1 rounded border font-semibold ${riskInfo.bg}`}
-            >
-              {riskInfo.icon}
-              <span>{riskInfo.label}</span>
-            </div>
-          </div>
-
-          {/* Diagnosis Headline */}
-          <div>
-            <h2 className="text-base font-semibold text-white leading-snug">
-              {activeRunbook.diagnosis}
-            </h2>
-            <p className="text-xs text-obsidian-300 mt-1 leading-relaxed">
-              <span className="text-brand-cyan font-semibold font-mono">ROOT CAUSE:</span>{" "}
-              {activeRunbook.root_cause_hypothesis}
-            </p>
-          </div>
-
-          {/* Operational Risk Metrics Bar */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-obsidian-800 text-[11px] font-mono">
-            <div className="bg-obsidian-900/90 p-2 rounded border border-obsidian-800">
-              <div className="text-obsidian-500">BLAST RADIUS</div>
-              <div className="text-white font-semibold truncate">
-                {activeRunbook.risk_assessment?.blast_radius_scope || "Single Interface"}
-              </div>
-            </div>
-            <div className="bg-obsidian-900/90 p-2 rounded border border-obsidian-800">
-              <div className="text-obsidian-500">EST. DOWNTIME</div>
-              <div className="text-white font-semibold">
-                {activeRunbook.risk_assessment?.estimated_downtime_sec || 0} SECONDS
-              </div>
-            </div>
-            <div className="bg-obsidian-900/90 p-2 rounded border border-obsidian-800">
-              <div className="text-obsidian-500">CONFIDENCE</div>
-              <div className="text-emerald-400 font-bold">
-                {(activeRunbook.confidence_score * 100).toFixed(0)}% (TAC GROUNDED)
-              </div>
-            </div>
-            <div className="bg-obsidian-900/90 p-2 rounded border border-obsidian-800">
-              <div className="text-obsidian-500">SYNTHESIS ENGINE</div>
-              <div className="text-cyan-400 font-semibold truncate">
-                {activeRunbook.model_used}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
-      </section>
 
-      {/* 2. 4-Stage Operational Runbook Body */}
-      <div className="p-4 space-y-6 max-w-4xl mx-auto w-full flex-1">
-        {/* ── STAGE 1: PRE-CHECKS ───────────────────────────────────────────── */}
-        <section className="space-y-2">
-          <div className="flex items-center space-x-2 border-b border-obsidian-800 pb-1.5">
-            <span className="text-xs font-mono font-bold text-obsidian-400 bg-obsidian-800 px-2 py-0.5 rounded">
-              STAGE 01
-            </span>
-            <h3 className="text-sm font-mono font-bold text-white uppercase tracking-wider">
-              NON-DESTRUCTIVE PRE-CHECKS (READ-ONLY)
-            </h3>
+        {/* Diagnosis Statement */}
+        <div>
+          <h1 className="text-sm md:text-base font-semibold text-slate-100 font-sans tracking-tight leading-snug">
+            {activeRunbook?.diagnosis || "Awaiting Runbook Synthesis..."}
+          </h1>
+
+          {activeRunbook?.root_cause_hypothesis && (
+            <div className="mt-2 text-xs font-sans text-slate-300 bg-[#060a12] p-2.5 border-l-2 border-cyan-500">
+              <span className="text-cyan-400 font-mono font-bold text-[11px] uppercase mr-2">
+                ROOT CAUSE:
+              </span>
+              {activeRunbook.root_cause_hypothesis}
+            </div>
+          )}
+        </div>
+
+        {/* Inline Operational Metadata (Replaces the 4-Card Grid) */}
+        {activeRunbook && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-400 pt-1 border-t border-[#121b2d]">
+            <div>
+              <span className="text-slate-500">EST. DOWNTIME:</span>{" "}
+              <span className="text-slate-200">{downtimeSec}s</span>
+            </div>
+            <span className="text-slate-700">·</span>
+            <div>
+              <span className="text-slate-500">CONFIDENCE:</span>{" "}
+              <span className="text-emerald-400 font-semibold">
+                {(activeRunbook.confidence_score * 100).toFixed(0)}% (TAC GROUNDED)
+              </span>
+            </div>
+            <span className="text-slate-700">·</span>
+            <div>
+              <span className="text-slate-500">SYNTHESIS ENGINE:</span>{" "}
+              <span className="text-cyan-400">
+                {activeRunbook.model_used || "deterministic-rag"}
+              </span>
+            </div>
           </div>
+        )}
 
-          <div className="space-y-2.5">
-            {activeRunbook.pre_checks.map((pre, idx) => (
-              <div key={idx} className="glass-panel p-3 rounded-md space-y-2">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-obsidian-300 font-semibold">
-                    Step {pre.step}: {pre.description}
-                  </span>
-                  <button
-                    onClick={() => copyToClipboard(pre.command, `pre-${idx}`)}
-                    className="text-[11px] text-obsidian-400 hover:text-cyan-300 flex items-center space-x-1"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>{copiedStep === `pre-${idx}` ? "COPIED" : "COPY CLI"}</span>
-                  </button>
-                </div>
-                <div className="cli-box">{pre.command}</div>
-                <div className="text-[11px] font-mono text-obsidian-400 bg-obsidian-900/60 p-2 rounded border border-obsidian-800/80">
-                  <span className="text-obsidian-500 font-bold">EXPECTED DIAGNOSTIC:</span>{" "}
-                  {pre.expected_output}
-                </div>
-              </div>
-            ))}
+        {/* In-Progress Synthesis Action */}
+        {!activeRunbook && (
+          <div className="pt-2">
+            <button
+              onClick={() => troubleshootIncident(activeIncident.raw_log, activeIncident.device_id, activeIncident.vendor)}
+              disabled={isAnalyzing}
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-4 py-1.5 font-medium flex items-center space-x-2 transition disabled:opacity-50"
+            >
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>
+                {isAnalyzing ? "Synthesizing Runbook..." : "Generate Deterministic Runbook"}
+              </span>
+            </button>
           </div>
-        </section>
+        )}
+      </div>
 
-        {/* ── STAGE 2: REMEDIATION CLI ─────────────────────────────────────── */}
-        <section className="space-y-2">
-          <div className="flex items-center space-x-2 border-b border-blue-900/60 pb-1.5">
-            <span className="text-xs font-mono font-bold text-blue-300 bg-blue-950 px-2 py-0.5 rounded border border-blue-700/50">
-              STAGE 02
-            </span>
-            <h3 className="text-sm font-mono font-bold text-blue-200 uppercase tracking-wider">
-              DETERMINISTIC REMEDIATION CLI COMMANDS
-            </h3>
-          </div>
-
-          <div className="space-y-3">
-            {activeRunbook.remediation_commands.map((rem, idx) => (
-              <div
-                key={idx}
-                className="bg-obsidian-900 border border-blue-900/50 p-3.5 rounded-md space-y-2.5 ring-1 ring-blue-500/20"
-              >
-                <div className="flex items-center justify-between text-xs font-mono">
+      {/* ────────────────────────────────────────────────────────────────────────
+          2. CONTINUOUS 4-STAGE PLAYBOOK DOCUMENT (Flat, High-Density)
+          ──────────────────────────────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 font-mono text-xs">
+        {activeRunbook ? (
+          <>
+            {/* Stage 1: Pre-checks */}
+            <section className="space-y-3 pb-6 border-b border-[#141e30]">
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#141e30]">
+                <div>
                   <div className="flex items-center space-x-2">
-                    <span className="text-white font-bold">
-                      Step {rem.step}: {rem.action}
-                    </span>
-                    <span className="text-[10px] bg-blue-900/60 text-blue-300 px-1.5 py-0.2 rounded border border-blue-700/50 uppercase">
-                      MODE: {rem.config_mode}
+                    <span className="font-bold tracking-wider text-cyan-400">STAGE 01</span>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-semibold text-slate-200 uppercase tracking-wide">
+                      NON-DESTRUCTIVE PRE-CHECKS (READ-ONLY)
                     </span>
                   </div>
-
-                  <button
-                    onClick={() => copyToClipboard(rem.command, `rem-${idx}`)}
-                    className="text-[11px] bg-blue-950 hover:bg-blue-900 text-cyan-300 border border-blue-700/60 px-2 py-0.5 rounded flex items-center space-x-1"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>{copiedStep === `rem-${idx}` ? "COPIED" : "COPY CONFIG"}</span>
-                  </button>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                    Collect baseline router state and telemetry validation before mutation
+                  </p>
                 </div>
-
-                <div className="cli-box whitespace-pre">{rem.command}</div>
-
-                <div className="text-[11px] text-obsidian-300 bg-blue-950/30 p-2 rounded border border-blue-900/40 leading-relaxed font-sans">
-                  <span className="font-mono text-blue-400 font-bold">RATIONALE:</span>{" "}
-                  {rem.explanation}
-                </div>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {activeRunbook.pre_checks.length} COMMANDS
+                </span>
               </div>
-            ))}
-          </div>
-        </section>
 
-        {/* ── STAGE 3: POST-CHECKS ─────────────────────────────────────────── */}
-        <section className="space-y-2">
-          <div className="flex items-center space-x-2 border-b border-emerald-900/60 pb-1.5">
-            <span className="text-xs font-mono font-bold text-emerald-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-700/50">
-              STAGE 03
-            </span>
-            <h3 className="text-sm font-mono font-bold text-emerald-200 uppercase tracking-wider">
-              EMPIRICAL VALIDATION & CONVERGENCE POST-CHECKS
-            </h3>
-          </div>
-
-          <div className="space-y-2.5">
-            {activeRunbook.post_checks.map((post, idx) => (
-              <div key={idx} className="glass-panel p-3 rounded-md space-y-2 border-emerald-900/30">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-emerald-300 font-semibold">
-                    Step {post.step}: Validation Query
-                  </span>
-                  <button
-                    onClick={() => copyToClipboard(post.command, `post-${idx}`)}
-                    className="text-[11px] text-obsidian-400 hover:text-emerald-300 flex items-center space-x-1"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>{copiedStep === `post-${idx}` ? "COPIED" : "COPY CLI"}</span>
-                  </button>
-                </div>
-                <div className="cli-box text-emerald-300">{post.command}</div>
-                <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 p-2 rounded border border-emerald-800/40">
-                  <span className="text-emerald-500 font-bold">SUCCESS CRITERIA:</span>{" "}
-                  {post.validation_criteria}
-                </div>
+              <div className="space-y-4">
+                {activeRunbook.pre_checks.map((cmd, idx) => (
+                  <StepItem
+                    key={idx}
+                    index={idx + 1}
+                    id={`pre-${idx}`}
+                    title={cmd.description}
+                    command={cmd.command}
+                    expected={cmd.expected_output}
+                    mode="EXEC"
+                    copiedIndex={copiedIndex}
+                    onCopy={handleCopy}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
 
-        {/* ── STAGE 4: ROLLBACK PLAYBOOK ───────────────────────────────────── */}
-        <section className="space-y-2 pb-6">
-          <div className="flex items-center space-x-2 border-b border-amber-900/60 pb-1.5">
-            <span className="text-xs font-mono font-bold text-amber-300 bg-amber-950 px-2 py-0.5 rounded border border-amber-700/50">
-              STAGE 04
-            </span>
-            <h3 className="text-sm font-mono font-bold text-amber-200 uppercase tracking-wider">
-              SAFE REVERSION & ROLLBACK PLAYBOOK
-            </h3>
-          </div>
-
-          <div className="space-y-2.5">
-            {activeRunbook.rollback_playbook.map((rb, idx) => (
-              <div key={idx} className="glass-panel p-3 rounded-md space-y-2 border-amber-900/30">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-amber-300 font-semibold">
-                    Step {rb.step}: {rb.action}
-                  </span>
-                  <button
-                    onClick={() => copyToClipboard(rb.command, `rb-${idx}`)}
-                    className="text-[11px] text-obsidian-400 hover:text-amber-300 flex items-center space-x-1"
-                  >
-                    <Copy className="w-3 h-3" />
-                    <span>{copiedStep === `rb-${idx}` ? "COPIED" : "COPY REVERT"}</span>
-                  </button>
+            {/* Stage 2: Remediation */}
+            <section className="space-y-3 pb-6 border-b border-[#141e30]">
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#141e30]">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold tracking-wider text-amber-400">STAGE 02</span>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-semibold text-slate-200 uppercase tracking-wide">
+                      DETERMINISTIC REMEDIATION CLI COMMANDS
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                    Carrier-grade configuration changes grounded in official TAC resolution manuals
+                  </p>
                 </div>
-                <div className="cli-box text-amber-300 whitespace-pre">{rb.command}</div>
-                <div className="text-[11px] font-mono text-amber-400 bg-amber-950/40 p-2 rounded border border-amber-800/40">
-                  <span className="text-amber-500 font-bold">TRIGGER CONDITION:</span>{" "}
-                  {rb.trigger_condition}
-                </div>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {activeRunbook.remediation_commands.length} COMMANDS
+                </span>
               </div>
-            ))}
+
+              <div className="space-y-4">
+                {activeRunbook.remediation_commands.map((cmd, idx) => (
+                  <StepItem
+                    key={idx}
+                    index={idx + 1}
+                    id={`rem-${idx}`}
+                    title={cmd.action || cmd.explanation}
+                    command={cmd.command}
+                    mode={cmd.config_mode || "CONFIG"}
+                    copiedIndex={copiedIndex}
+                    onCopy={handleCopy}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {/* Stage 3: Post-checks */}
+            <section className="space-y-3 pb-6 border-b border-[#141e30]">
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#141e30]">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold tracking-wider text-emerald-400">STAGE 03</span>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-semibold text-slate-200 uppercase tracking-wide">
+                      POST-REMEDIATION VERIFICATION
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                    Assert state restoration, protocol convergence, and zero packet drops
+                  </p>
+                </div>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {activeRunbook.post_checks.length} COMMANDS
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {activeRunbook.post_checks.map((cmd, idx) => (
+                  <StepItem
+                    key={idx}
+                    index={idx + 1}
+                    id={`post-${idx}`}
+                    title={cmd.validation_criteria}
+                    command={cmd.command}
+                    mode="VERIFY"
+                    copiedIndex={copiedIndex}
+                    onCopy={handleCopy}
+                  />
+                ))}
+              </div>
+            </section>
+
+            {/* Stage 4: Rollback */}
+            <section className="space-y-3 pb-6 border-b border-[#141e30] last:border-b-0">
+              <div className="flex items-center justify-between pb-1.5 border-b border-[#141e30]">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold tracking-wider text-rose-400">STAGE 04</span>
+                    <span className="text-slate-600">·</span>
+                    <span className="font-semibold text-slate-200 uppercase tracking-wide">
+                      AUTOMATED ROLLBACK CONTINGENCY
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 font-sans mt-0.5">
+                    Deterministic rollback commands if verification assertions fail
+                  </p>
+                </div>
+                <span className="text-[11px] text-slate-500 font-mono">
+                  {activeRunbook.rollback_playbook.length} COMMANDS
+                </span>
+              </div>
+
+              <div className="space-y-4">
+                {activeRunbook.rollback_playbook.map((cmd, idx) => (
+                  <StepItem
+                    key={idx}
+                    index={idx + 1}
+                    id={`roll-${idx}`}
+                    title={cmd.action || `Trigger: ${cmd.trigger_condition}`}
+                    command={cmd.command}
+                    mode="ROLLBACK"
+                    copiedIndex={copiedIndex}
+                    onCopy={handleCopy}
+                  />
+                ))}
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="h-full flex items-center justify-center text-slate-500">
+            {isAnalyzing ? (
+              <div className="flex items-center space-x-3 text-cyan-400">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <span>RAG synthesis engine computing deterministic playbook...</span>
+              </div>
+            ) : (
+              <span>Click Generate Deterministic Runbook above to view the 4-stage execution plan.</span>
+            )}
           </div>
-        </section>
+        )}
       </div>
     </main>
+  );
+}
+
+interface StepItemProps {
+  index: number;
+  id: string;
+  title?: string;
+  command: string;
+  expected?: string;
+  mode?: string;
+  copiedIndex: string | null;
+  onCopy: (text: string, id: string) => void;
+}
+
+function StepItem({
+  index,
+  id,
+  title,
+  command,
+  expected,
+  mode,
+  copiedIndex,
+  onCopy,
+}: StepItemProps) {
+  const isCopied = copiedIndex === id;
+
+  return (
+    <div className="space-y-1.5 group">
+      {/* Title & Mode */}
+      <div className="flex items-center justify-between text-xs text-slate-300">
+        <div className="flex items-center space-x-2 font-medium font-sans">
+          <span className="font-mono text-slate-500 text-[11px]">
+            {String(index).padStart(2, "0")}.
+          </span>
+          <span>{title || command}</span>
+        </div>
+
+        <div className="flex items-center space-x-2">
+          {mode && (
+            <span className="text-[10px] text-slate-500 uppercase font-mono">
+              MODE: {mode}
+            </span>
+          )}
+          <button
+            onClick={() => onCopy(command, id)}
+            className="text-[11px] text-slate-400 hover:text-cyan-300 flex items-center space-x-1 px-1.5 py-0.5 transition"
+            title="Copy CLI Syntax to Clipboard"
+          >
+            {isCopied ? (
+              <>
+                <Check className="w-3 h-3 text-emerald-400" />
+                <span className="text-emerald-400">COPIED</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3 h-3" />
+                <span>COPY</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Monospace CLI Terminal Stream Line */}
+      <pre className="font-mono text-xs bg-[#04070d] text-cyan-300 p-2.5 border-l-2 border-cyan-500/50 overflow-x-auto select-all leading-relaxed">
+        <code>{command}</code>
+      </pre>
+
+      {/* Inline Expected Diagnostic Assertion (Flat, No Card) */}
+      {expected && (
+        <div className="text-[11px] text-slate-400 flex items-start space-x-1.5 pl-3 pt-0.5">
+          <span className="text-slate-600 font-mono">↳</span>
+          <div>
+            <span className="text-slate-500 font-mono uppercase mr-1">
+              EXPECTED:
+            </span>
+            <span className="text-slate-300 font-mono">{expected}</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

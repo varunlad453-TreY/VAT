@@ -142,6 +142,36 @@ export interface TelemetryIngestResponseDTO {
   troubleshooting_reports: TroubleshootResponseDTO[];
 }
 
+export interface StepCommand {
+  step?: number;
+  command: string;
+  description?: string;
+  expected_output?: string;
+  mode?: string;
+}
+
+export interface GroundedCitationSource {
+  title: string;
+  vendor: string;
+  url?: string;
+  similarity_score: number;
+  excerpt: string;
+}
+
+export interface RunbookStage {
+  failure_diagnosis: string;
+  root_cause_hypothesis: string;
+  blast_radius: string;
+  estimated_downtime_seconds: number;
+  confidence_score: number;
+  synthesis_engine: string;
+  runbook_pre_checks: StepCommand[];
+  runbook_remediation: StepCommand[];
+  runbook_post_checks: StepCommand[];
+  runbook_rollback: StepCommand[];
+  grounded_sources: GroundedCitationSource[];
+}
+
 export interface AuditLedgerEntry {
   id?: number;
   incident_id?: string | null;
@@ -158,7 +188,15 @@ export interface AuditLedgerEntry {
   model_used: string;
   executed_by?: string;
   created_at: string;
+  // Aliases for unified presentation
+  failure_diagnosis?: string;
+  blast_radius?: string;
+  runbook_pre_checks?: any[];
+  runbook_remediation?: any[];
+  runbook_rollback?: any[];
 }
+
+export type AuditRecord = AuditLedgerEntry;
 
 export interface HealthResponse {
   status: "healthy" | "degraded";

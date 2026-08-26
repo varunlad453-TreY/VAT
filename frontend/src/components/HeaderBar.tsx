@@ -4,13 +4,10 @@ import React from "react";
 import { useNOCStore } from "@/store/useNOCStore";
 import {
   Activity,
-  AlertCircle,
   Database,
   Layers,
-  Radio,
   RefreshCw,
-  Server,
-  ShieldAlert,
+  Shield,
   Terminal,
   Zap,
 } from "lucide-react";
@@ -31,115 +28,107 @@ export function HeaderBar({ onOpenAudit }: HeaderBarProps) {
   const isDbConnected = health?.database_connected ?? false;
 
   return (
-    <header className="h-14 bg-obsidian-900 border-b border-obsidian-700/80 px-4 flex items-center justify-between shrink-0 select-none">
-      {/* Left: Brand Identity & Tier-1 Indicator */}
-      <div className="flex items-center space-x-3">
-        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-900/50 to-obsidian-800 border border-blue-600/40 px-2.5 py-1 rounded">
-          <ShieldAlert className="w-4 h-4 text-brand-cyan" />
-          <span className="font-bold tracking-wider text-sm text-white font-mono">
-            VAT<span className="text-brand-cyan">.ENTERPRISE</span>
+    <header className="h-11 bg-[#090d16] border-b border-[#172236] px-4 flex items-center justify-between shrink-0 select-none text-xs font-mono">
+      {/* Left: Brand Identity & Supported Multi-Vendor Engines */}
+      <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-2 text-white">
+          <span className="font-bold tracking-wider text-sm">
+            VAT<span className="text-cyan-400"> // NOC</span>
           </span>
-          <span className="text-[10px] bg-blue-500/20 text-blue-300 font-semibold px-1.5 py-0.5 rounded border border-blue-500/30">
-            NOC TIER-1
+          <span className="text-[10px] text-slate-500 font-normal">
+            TIER-1 REMEDIATION
           </span>
         </div>
 
-        {/* Vendor Platform Badges */}
-        <div className="hidden lg:flex items-center space-x-1.5 pl-3 border-l border-obsidian-700/60">
-          <span className="text-[11px] font-mono text-obsidian-400">ENGINES:</span>
-          {["CISCO", "JUNIPER", "VELOCLOUD", "ARISTA"].map((vendor) => (
-            <span
-              key={vendor}
-              className="text-[10px] font-mono bg-obsidian-800 text-obsidian-300 px-2 py-0.5 rounded border border-obsidian-700 font-medium"
-            >
-              {vendor}
-            </span>
-          ))}
-        </div>
+        <span className="text-slate-700">|</span>
 
-        {/* Demo Mode Visual Flag */}
-        {isDemoMode && (
-          <div className="flex items-center space-x-1 bg-amber-950/80 border border-amber-600/60 text-amber-300 text-[10px] font-mono px-2 py-0.5 rounded">
-            <span>[DEMO FIXTURES ACTIVE]</span>
-            <button
-              onClick={clearFeed}
-              className="ml-1 text-amber-200 hover:text-white underline"
-            >
-              Clear
-            </button>
-          </div>
-        )}
+        <div className="hidden lg:flex items-center space-x-2 text-[11px] text-slate-400">
+          <span className="text-slate-500">ENGINES:</span>
+          <span>Cisco</span>
+          <span className="text-slate-700">·</span>
+          <span>Juniper</span>
+          <span className="text-slate-700">·</span>
+          <span>VeloCloud</span>
+          <span className="text-slate-700">·</span>
+          <span>Arista</span>
+        </div>
       </div>
 
-      {/* Center: Real-Time Stream Status & Stats */}
-      <div className="hidden md:flex items-center space-x-4 text-xs font-mono">
-        <div className="flex items-center space-x-1.5 text-obsidian-300 bg-obsidian-850 px-2.5 py-1 rounded border border-obsidian-700/60">
-          <Layers className="w-3.5 h-3.5 text-brand-sky" />
-          <span>EVENTS:</span>
-          <span className="text-white font-bold">{telemetryCount}</span>
+      {/* Center: Inline Real-Time Status & Metrics */}
+      <div className="hidden md:flex items-center space-x-4 text-[11px] text-slate-400">
+        <div>
+          <span className="text-slate-500">EVENTS:</span>{" "}
+          <span className="text-slate-200 font-semibold">{telemetryCount}</span>
         </div>
 
-        {/* Dynamic Database Health State */}
-        <div className="flex items-center space-x-1.5 text-obsidian-300 bg-obsidian-850 px-2.5 py-1 rounded border border-obsidian-700/60">
-          <Database
-            className={`w-3.5 h-3.5 ${
-              isDbConnected ? "text-brand-emerald" : "text-amber-400"
-            }`}
-          />
-          <span>PGVECTOR:</span>
-          <span
-            className={`font-bold ${
-              isDbConnected ? "text-brand-emerald" : "text-amber-400"
-            }`}
-          >
-            {isDbConnected ? "ONLINE (HNSW+RRF)" : "AIR-GAPPED (OFFLINE)"}
+        <span className="text-slate-700">·</span>
+
+        <div>
+          <span className="text-slate-500">PGVECTOR:</span>{" "}
+          <span className={isDbConnected ? "text-emerald-400 font-medium" : "text-amber-400 font-medium"}>
+            {isDbConnected ? "ONLINE (HNSW+RRF)" : "AIR-GAPPED"}
           </span>
         </div>
 
         {activeRunbook && (
-          <div className="flex items-center space-x-1.5 text-obsidian-300 bg-obsidian-850 px-2.5 py-1 rounded border border-obsidian-700/60">
-            <Activity className="w-3.5 h-3.5 text-brand-cyan" />
-            <span>CONFIDENCE:</span>
-            <span className="text-cyan-400 font-bold">
-              {(activeRunbook.confidence_score * 100).toFixed(0)}%
-            </span>
-          </div>
+          <>
+            <span className="text-slate-700">·</span>
+            <div>
+              <span className="text-slate-500">CONFIDENCE:</span>{" "}
+              <span className="text-cyan-400 font-semibold">
+                {(activeRunbook.confidence_score * 100).toFixed(0)}%
+              </span>
+            </div>
+          </>
+        )}
+
+        {isDemoMode && (
+          <>
+            <span className="text-slate-700">·</span>
+            <div className="text-amber-400 flex items-center space-x-1">
+              <span>[DEMO FIXTURES]</span>
+              <button
+                onClick={clearFeed}
+                className="text-slate-400 hover:text-white underline ml-1"
+              >
+                Clear
+              </button>
+            </div>
+          </>
         )}
       </div>
 
-      {/* Right: Actions & Live WS Indicator */}
-      <div className="flex items-center space-x-2.5">
+      {/* Right: Operational Controls & Live Connection State */}
+      <div className="flex items-center space-x-3 text-[11px]">
         <button
           onClick={loadDemoFixtures}
-          title="Load Isolated QA Test Scenarios for Demonstration"
-          className="flex items-center space-x-1 text-xs font-mono bg-obsidian-800 hover:bg-obsidian-700 text-obsidian-300 px-2.5 py-1.5 rounded border border-obsidian-700 transition"
+          title="Load Isolated QA Test Scenarios"
+          className="text-slate-400 hover:text-amber-300 transition flex items-center space-x-1"
         >
           <Zap className="w-3 h-3 text-amber-400" />
-          <span className="hidden sm:inline">LOAD DEMO FIXTURES</span>
+          <span className="hidden sm:inline">DEMO FIXTURES</span>
         </button>
 
         <button
           onClick={onOpenAudit}
-          className="flex items-center space-x-1 text-xs font-mono bg-blue-950/80 hover:bg-blue-900 text-blue-200 border border-blue-700/60 px-2.5 py-1.5 rounded transition"
+          className="text-slate-400 hover:text-cyan-300 transition flex items-center space-x-1"
         >
-          <Terminal className="w-3.5 h-3.5 text-brand-cyan" />
+          <Terminal className="w-3 h-3 text-cyan-400" />
           <span>AUDIT LEDGER</span>
         </button>
 
-        {/* Live WS Pill */}
-        <div
-          className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-full border text-[11px] font-mono font-medium ${
-            wsConnected
-              ? "bg-emerald-950/60 text-emerald-300 border-emerald-600/50"
-              : "bg-amber-950/60 text-amber-300 border-amber-600/50"
-          }`}
-        >
+        <span className="text-slate-700">|</span>
+
+        {/* Live Status Indicator */}
+        <div className="flex items-center space-x-1.5 font-medium">
           <div
-            className={`w-2 h-2 rounded-full ${
-              wsConnected ? "bg-emerald-400 live-indicator" : "bg-amber-400"
+            className={`w-1.5 h-1.5 rounded-full ${
+              wsConnected ? "bg-emerald-400 live-dot" : "bg-amber-400"
             }`}
           />
-          <span>{wsConnected ? "LIVE STREAM" : "OFFLINE"}</span>
+          <span className={wsConnected ? "text-emerald-400" : "text-amber-400"}>
+            {wsConnected ? "STREAM ACTIVE" : "OFFLINE"}
+          </span>
         </div>
       </div>
     </header>

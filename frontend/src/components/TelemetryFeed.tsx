@@ -4,16 +4,13 @@ import React, { useState } from "react";
 import { useNOCStore } from "@/store/useNOCStore";
 import { ParsedTelemetry, SeverityLevel } from "@/types/vat";
 import {
-  AlertTriangle,
-  ArrowRight,
+  ChevronRight,
   Filter,
-  Flame,
   Inbox,
   Plus,
   Radio,
   Search,
   Send,
-  Terminal,
   Zap,
 } from "lucide-react";
 
@@ -66,117 +63,112 @@ export function TelemetryFeed() {
     return true;
   });
 
-  const getSeverityBadge = (severity: SeverityLevel) => {
+  const getSeverityBorderColor = (severity: SeverityLevel) => {
     switch (severity) {
       case "CRITICAL":
-        return "bg-red-950/80 text-red-300 border-red-700/60";
+        return "border-l-red-500 text-red-400";
       case "ERROR":
-        return "bg-amber-950/80 text-amber-300 border-amber-700/60";
+        return "border-l-amber-500 text-amber-400";
       case "WARNING":
-        return "bg-yellow-950/80 text-yellow-300 border-yellow-700/60";
+        return "border-l-yellow-500 text-yellow-400";
       default:
-        return "bg-blue-950/80 text-blue-300 border-blue-700/60";
+        return "border-l-blue-500 text-blue-400";
     }
   };
 
-  const getVendorBadgeColor = (vendor: string) => {
-    switch (vendor.toLowerCase()) {
-      case "cisco":
-        return "text-cyan-400 border-cyan-700/40 bg-cyan-950/40";
-      case "juniper":
-        return "text-purple-400 border-purple-700/40 bg-purple-950/40";
-      case "velocloud":
-        return "text-emerald-400 border-emerald-700/40 bg-emerald-950/40";
-      case "arista":
-        return "text-amber-400 border-amber-700/40 bg-amber-950/40";
+  const getSeverityDot = (severity: SeverityLevel) => {
+    switch (severity) {
+      case "CRITICAL":
+        return "text-red-400";
+      case "ERROR":
+        return "text-amber-400";
+      case "WARNING":
+        return "text-yellow-400";
       default:
-        return "text-obsidian-300 border-obsidian-700 bg-obsidian-800";
+        return "text-blue-400";
     }
   };
 
   return (
-    <aside className="w-80 md:w-96 bg-obsidian-900 border-r border-obsidian-700/80 flex flex-col h-full shrink-0">
-      {/* Feed Header */}
-      <div className="p-3 border-b border-obsidian-700/60 flex items-center justify-between bg-obsidian-850">
-        <div className="flex items-center space-x-2">
-          <Radio className="w-4 h-4 text-brand-cyan" />
-          <span className="font-mono text-xs font-bold uppercase tracking-wider text-white">
-            TELEMETRY INGESTION STREAM
-          </span>
+    <aside className="w-80 md:w-96 bg-[#070b12] border-r border-[#172236] flex flex-col h-full shrink-0 font-mono text-xs select-none">
+      {/* Pane Header */}
+      <div className="h-10 px-3 border-b border-[#172236] bg-[#090e18] flex items-center justify-between">
+        <div className="flex items-center space-x-2 text-slate-300 font-semibold tracking-wider text-[11px] uppercase">
+          <Radio className="w-3.5 h-3.5 text-cyan-400" />
+          <span>TELEMETRY INGESTION STREAM</span>
         </div>
+
         <button
           onClick={() => setShowIngestBox(!showIngestBox)}
-          className="text-xs bg-obsidian-800 hover:bg-obsidian-700 text-cyan-300 p-1.5 rounded border border-obsidian-700 flex items-center space-x-1"
+          className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-0.5"
           title="Submit Live Raw Telemetry"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span className="text-[10px] font-mono">INGEST</span>
+          <Plus className="w-3 h-3" />
+          <span>INGEST</span>
         </button>
       </div>
 
-      {/* Manual Log Ingestion Box */}
+      {/* Manual Ingestion Input Area */}
       {showIngestBox && (
-        <form onSubmit={handleManualIngest} className="p-3 border-b border-obsidian-700 bg-obsidian-950 space-y-2">
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              placeholder="Device ID (optional, e.g. Core-RT-01)"
-              value={customDevice}
-              onChange={(e) => setCustomDevice(e.target.value)}
-              className="text-xs bg-obsidian-900 border border-obsidian-700 rounded px-2 py-1 text-white font-mono w-full focus:outline-none focus:border-brand-sky"
-            />
-          </div>
+        <form onSubmit={handleManualIngest} className="p-3 border-b border-[#172236] bg-[#090d16] space-y-2">
+          <input
+            type="text"
+            placeholder="Device ID (optional, e.g. Core-RT-01)"
+            value={customDevice}
+            onChange={(e) => setCustomDevice(e.target.value)}
+            className="w-full bg-[#05080e] border border-[#1e2c45] rounded-none px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
+          />
           <textarea
             rows={3}
-            placeholder="Paste raw carrier syslog (e.g. Cisco BGP, Juniper Junos, SD-WAN, Arista)..."
+            placeholder="Paste raw syslog line..."
             value={customLogInput}
             onChange={(e) => setCustomLogInput(e.target.value)}
-            className="text-xs bg-obsidian-900 border border-obsidian-700 rounded p-2 text-white font-mono w-full focus:outline-none focus:border-brand-sky"
+            className="w-full bg-[#05080e] border border-[#1e2c45] rounded-none p-2 text-xs text-slate-200 focus:outline-none focus:border-cyan-500"
           />
-          <div className="flex justify-end space-x-2">
+          <div className="flex justify-end space-x-2 text-[11px]">
             <button
               type="button"
               onClick={() => setShowIngestBox(false)}
-              className="text-xs px-2.5 py-1 text-obsidian-400 hover:text-white"
+              className="text-slate-400 hover:text-white px-2 py-0.5"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="text-xs bg-brand-blue hover:bg-blue-600 text-white font-mono px-3 py-1 rounded flex items-center space-x-1"
+              className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-0.5 font-medium flex items-center space-x-1"
             >
-              <Send className="w-3 h-3" />
+              <Send className="w-2.5 h-2.5" />
               <span>Diagnose</span>
             </button>
           </div>
         </form>
       )}
 
-      {/* Filters & Search */}
-      <div className="p-2.5 border-b border-obsidian-700/60 bg-obsidian-900/90 space-y-2">
+      {/* Filters & Search Toolbar */}
+      <div className="p-2.5 border-b border-[#172236] bg-[#080d16] space-y-2">
         {/* Search */}
         <div className="relative">
-          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-obsidian-500" />
+          <Search className="w-3 h-3 absolute left-2 top-2 text-slate-500" />
           <input
             type="text"
-            placeholder="Filter logs by keyword, IP, code..."
+            placeholder="Filter by keyword, IP, code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-obsidian-950 border border-obsidian-700/80 rounded pl-8 pr-2 py-1 text-xs text-obsidian-200 font-mono focus:outline-none focus:border-brand-sky"
+            className="w-full bg-[#04070d] border border-[#172236] rounded-none pl-7 pr-2 py-1 text-[11px] text-slate-200 focus:outline-none focus:border-cyan-500"
           />
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px] font-mono">
-          <span className="text-obsidian-500 font-bold">VENDOR:</span>
+        {/* Flat Text Filter Tabs */}
+        <div className="flex items-center space-x-3 text-[10px] text-slate-400 pt-0.5 overflow-x-auto">
+          <span className="text-slate-600 font-semibold uppercase">Vendor:</span>
           {["all", "cisco", "juniper", "velocloud", "arista"].map((v) => (
             <button
               key={v}
               onClick={() => setFilterVendor(v)}
-              className={`px-2 py-0.5 rounded border transition capitalize ${
+              className={`capitalize transition ${
                 filterVendor === v
-                  ? "bg-brand-blue text-white border-blue-500"
-                  : "bg-obsidian-850 text-obsidian-400 border-obsidian-700 hover:text-white"
+                  ? "text-cyan-400 font-bold border-b border-cyan-400 pb-0.5"
+                  : "hover:text-slate-200 pb-0.5"
               }`}
             >
               {v}
@@ -185,23 +177,22 @@ export function TelemetryFeed() {
         </div>
       </div>
 
-      {/* Live Stream List */}
-      <div className="flex-1 overflow-y-auto divide-y divide-obsidian-800/80 p-2 space-y-2">
+      {/* High-Density Log Row Stream (No Cards) */}
+      <div className="flex-1 overflow-y-auto divide-y divide-[#121927]">
         {filteredLogs.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center p-6 text-center text-obsidian-500 font-mono text-xs space-y-3">
-            <Inbox className="w-8 h-8 text-obsidian-700" />
-            <div className="font-semibold text-obsidian-300">
+          <div className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-2">
+            <Inbox className="w-6 h-6 text-slate-700" />
+            <div className="text-slate-400 font-medium text-xs">
               Live Stream Awaiting Telemetry
             </div>
-            <p className="text-[11px] text-obsidian-500 max-w-xs leading-relaxed">
-              No telemetry received yet. Stream live multi-vendor syslogs via WebSocket (<code>/ws/telemetry</code>) or click <b>INGEST</b> above to submit a live event.
+            <p className="text-[10px] text-slate-600 max-w-xs leading-relaxed">
+              No telemetry received yet. Stream live multi-vendor syslogs via WebSocket or click <b>INGEST</b>.
             </p>
             <button
               onClick={loadDemoFixtures}
-              className="mt-2 text-[10px] bg-obsidian-850 hover:bg-obsidian-800 text-amber-300 border border-amber-800/50 px-2.5 py-1 rounded flex items-center space-x-1"
+              className="mt-2 text-[10px] text-amber-400 hover:text-amber-300 underline"
             >
-              <Zap className="w-3 h-3 text-amber-400" />
-              <span>Load QA Demo Fixtures</span>
+              Load Demo Fixtures
             </button>
           </div>
         ) : (
@@ -212,58 +203,52 @@ export function TelemetryFeed() {
               <div
                 key={idx}
                 onClick={() => selectIncident(item)}
-                className={`p-2.5 rounded-md cursor-pointer border transition ${
+                className={`p-3 cursor-pointer transition border-l-2 ${getSeverityBorderColor(
+                  item.severity
+                )} ${
                   isSelected
-                    ? "bg-blue-950/40 border-blue-500/80 ring-1 ring-blue-500/50"
-                    : "bg-obsidian-850/70 border-obsidian-700/60 hover:bg-obsidian-800/80 hover:border-obsidian-600"
+                    ? "bg-[#0f1729] text-white"
+                    : "hover:bg-[#0b101c] text-slate-300"
                 }`}
               >
-                {/* Meta Top: Vendor, Device, Severity */}
-                <div className="flex items-center justify-between text-[11px] font-mono mb-1.5">
-                  <div className="flex items-center space-x-1.5">
-                    <span
-                      className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded border ${getVendorBadgeColor(
-                        item.vendor
-                      )}`}
-                    >
-                      {item.vendor}
-                    </span>
-                    <span className="text-obsidian-300 font-semibold truncate max-w-[130px]">
-                      {item.device_id}
-                    </span>
+                {/* Meta Header */}
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                  <div className="flex items-center space-x-1.5 font-semibold">
+                    <span className="text-slate-200 uppercase">{item.vendor}</span>
+                    <span className="text-slate-600">·</span>
+                    <span className="text-slate-300">{item.device_id}</span>
                   </div>
 
-                  <span
-                    className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${getSeverityBadge(
-                      item.severity
-                    )}`}
-                  >
-                    {item.severity}
-                  </span>
+                  <div className="flex items-center space-x-1">
+                    <span className={`font-bold ${getSeverityDot(item.severity)}`}>
+                      ● {item.severity}
+                    </span>
+                  </div>
                 </div>
 
-                {/* Raw Log Preview */}
-                <div className="text-xs font-mono text-obsidian-200 line-clamp-2 leading-relaxed mb-2">
+                {/* Raw Log Line */}
+                <div className="text-[11px] leading-relaxed line-clamp-2 text-slate-300 font-mono">
                   {item.raw_log}
                 </div>
 
-                {/* Meta Bottom: Protocol, Event Code & Quick Action */}
-                <div className="flex items-center justify-between text-[10px] font-mono text-obsidian-400 pt-1 border-t border-obsidian-700/40">
+                {/* Meta Footer */}
+                <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
                   <div className="flex items-center space-x-2">
                     {item.protocol && (
-                      <span className="uppercase text-cyan-400 font-medium">
-                        [{item.protocol}]
+                      <span className="uppercase text-cyan-500 font-medium">
+                        {item.protocol}
                       </span>
                     )}
                     {item.peer_ip && (
-                      <span className="text-obsidian-400">IP: {item.peer_ip}</span>
+                      <span>IP: {item.peer_ip}</span>
                     )}
                   </div>
 
-                  <div className="flex items-center text-blue-400 font-semibold group">
-                    <span>Synthesize</span>
-                    <ArrowRight className="w-3 h-3 ml-0.5 group-hover:translate-x-0.5 transition" />
-                  </div>
+                  {isSelected && (
+                    <span className="text-cyan-400 font-semibold flex items-center">
+                      Inspecting <ChevronRight className="w-2.5 h-2.5 ml-0.5" />
+                    </span>
+                  )}
                 </div>
               </div>
             );
