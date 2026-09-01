@@ -1,0 +1,133 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vat-redpanda
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-redpanda
+    app.kubernetes.io/component: event-backbone
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  serviceName: vat-redpanda-headless
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-redpanda
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vat-redpanda
+        app.kubernetes.io/component: event-backbone
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9644"
+        prometheus.io/path: "/public_metrics"
+    spec:
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v23.3.14
+          command:
+            - rpk
+            - redpanda
+            - start
+            - --smp=2
+            - --memory=4G
+            - --reserve-memory=500M
+            - --overprovisioned
+            - --node-id=$(POD_INDEX)
+            - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+            - --advertise-kafka-addr=PLAINTEXT://vat-redpanda-$(POD_INDEX).vat-redpanda-headless.vat-system.svc.cluster.local:9092
+            - --rpc-addr=0.0.0.0:33145
+            - --advertise-rpc-addr=vat-redpanda-$(POD_INDEX).vat-redpanda-headless.vat-system.svc.cluster.local:33145
+            - --admin-addr=0.0.0.0:9644
+          ports:
+            - name: kafka
+              containerPort: 9092
+              protocol: TCP
+            - name: rpc
+              containerPort: 33145
+              protocol: TCP
+            - name: admin
+              containerPort: 9644
+              protocol: TCP
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "4Gi"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+          readinessProbe:
+            httpGet:
+              path: /v1/status/ready
+              port: 9644
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /public_metrics
+              port: 9644
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts:
+            - name: datadir
+              mountPath: /var/lib/redpanda/data
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-redpanda-service
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-redpanda-service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vat-redpanda
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+      protocol: TCP
+    - name: admin
+      port: 9644
+      targetPort: 9644
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-redpanda-headless
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-redpanda-headless
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: vat-redpanda
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+      protocol: TCP
+    - name: rpc
+      port: 33145
+      targetPort: 33145
+      protocol: TCP

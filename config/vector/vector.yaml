@@ -1,0 +1,120 @@
+# ==============================================================================
+# Vector.dev Edge Telemetry Ingestion & Stream Normalization Configuration
+# Target Throughput: 100,000+ EPS • Rust-Engine • Multi-Vendor Syslog Normalizer
+# ==============================================================================
+
+data_dir: /var/lib/vector
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 1. INGESTION SOURCES (Edge Receivers on Router Collector Nodes)
+# ──────────────────────────────────────────────────────────────────────────────
+sources:
+  # Carrier UDP Syslog Listener (RFC 3164 / RFC 5424)
+  syslog_udp:
+    type: syslog
+    address: 0.0.0.0:514
+    mode: udp
+    max_length: 65536
+
+  # High-Reliability TCP Syslog Listener
+  syslog_tcp:
+    type: syslog
+    address: 0.0.0.0:1514
+    mode: tcp
+    max_length: 65536
+
+  # Bulk HTTP Telemetry Receiver (for agent bulk pushes)
+  http_telemetry:
+    type: http_server
+    address: 0.0.0.0:8088
+    path: /telemetry/bulk
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 2. VECTOR REMAP LANGUAGE (VRL) TRANSFORMS (Normalization & Deduplication)
+# ──────────────────────────────────────────────────────────────────────────────
+transforms:
+  # Filter noise: Drop raw level-7 DEBUG spam to conserve stream bandwidth
+  filter_noise:
+    type: filter
+    inputs:
+      - syslog_udp
+      - syslog_tcp
+      - http_telemetry
+    condition: '!contains(string!(.message), "DEBUG") && !contains(string!(.message), "AUTHPRIV-7")'
+
+  # Multi-Vendor Tokenizer & Standardization (Cisco, Juniper, VeloCloud, Arista)
+  normalize_telemetry:
+    type: remap
+    inputs:
+      - filter_noise
+    source: |
+      .raw_log = string!(.message)
+      .received_at = now()
+      .ingest_node = get_hostname!()
+
+      # Extract standard carrier metadata
+      msg = downcase(string!(.raw_log))
+      
+      # Vendor Classification
+      if contains(msg, "cisco") || contains(.raw_log, "%BGP-") || contains(.raw_log, "%OSPF-") || contains(.raw_log, "%LINK-") {
+        .vendor = "cisco"
+        .protocol = if contains(msg, "bgp") { "bgp" } else if contains(msg, "ospf") { "ospf" } else { "interface" }
+      } else if contains(msg, "juniper") || contains(.raw_log, "rpd[") || contains(.raw_log, "RPD_") {
+        .vendor = "juniper"
+        .protocol = if contains(msg, "bgp") { "bgp" } else if contains(msg, "ospf") { "ospf" } else { "interface" }
+      } else if contains(msg, "velocloud") || contains(msg, "velobrain") || contains(msg, "vcmp") || contains(msg, "edge_link") {
+        .vendor = "velocloud"
+        .protocol = "ipsec"
+      } else if contains(msg, "arista") || contains(.raw_log, "%MLAG-") || contains(.raw_log, "%VXLAN-") {
+        .vendor = "arista"
+        .protocol = "evpn"
+      } else {
+        .vendor = "generic"
+        .protocol = "general"
+      }
+
+      # Normalized Severity Mapping
+      if contains(msg, "down") || contains(msg, "dead") || contains(msg, "split_brain") || contains(msg, "expired") {
+        .severity = "CRITICAL"
+      } else if contains(msg, "degraded") || contains(msg, "retransmission") || contains(msg, "loss") || contains(msg, "mismatch") {
+        .severity = "ERROR"
+      } else if contains(msg, "warning") || contains(msg, "flap") {
+        .severity = "WARNING"
+      } else {
+        .severity = "INFO"
+      }
+
+      # Device ID Extraction
+      .device_id = string(.host) ?? "Edge-Router-Collector"
+
+# ──────────────────────────────────────────────────────────────────────────────
+# 3. OUTPUT SINKS (Redpanda Kafka-Compatible Streaming Cluster)
+# ──────────────────────────────────────────────────────────────────────────────
+sinks:
+  # Stream to Redpanda raw topic (lossless audit buffer with disk spillover)
+  redpanda_raw_stream:
+    type: kafka
+    inputs:
+      - filter_noise
+    bootstrap_servers: "vat-redpanda-service.vat-system.svc.cluster.local:9092"
+    topic: "vat.telemetry.raw"
+    encoding:
+      codec: json
+    buffer:
+      type: disk
+      max_size: 10737418240 # 10 GB Local Spool Buffer on Router Node
+      when_full: block
+
+  # Stream to Redpanda normalized telemetry topic
+  redpanda_parsed_stream:
+    type: kafka
+    inputs:
+      - normalize_telemetry
+    bootstrap_servers: "vat-redpanda-service.vat-system.svc.cluster.local:9092"
+    topic: "vat.telemetry.parsed"
+    encoding:
+      codec: json
+    buffer:
+      type: memory
+      max_events: 50000
+      when_full: block
