@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vat-clickhouse
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-clickhouse
+    app.kubernetes.io/component: time-series-storage
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  serviceName: vat-clickhouse-headless
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-clickhouse
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vat-clickhouse
+        app.kubernetes.io/component: time-series-storage
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8123"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.3-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8123
+              protocol: TCP
+            - name: native
+              containerPort: 9000
+              protocol: TCP
+          env:
+            - name: CLICKHOUSE_DB
+              value: "vat_telemetry"
+            - name: CLICKHOUSE_USER
+              value: "default"
+            - name: CLICKHOUSE_PASSWORD
+              value: ""
+          resources:
+            requests:
+              cpu: "2000m"
+              memory: "4Gi"
+            limits:
+              cpu: "4000m"
+              memory: "8Gi"
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8123
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - name: clickhouse-data
+              mountPath: /var/lib/clickhouse
+            - name: clickhouse-init
+              mountPath: /docker-entrypoint-initdb.d
+      volumes:
+        - name: clickhouse-init
+          configMap:
+            name: vat-clickhouse-init-config
+  volumeClaimTemplates:
+    - metadata:
+        name: clickhouse-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-clickhouse-service
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-clickhouse-service
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vat-clickhouse
+  ports:
+    - name: http
+      port: 8123
+      targetPort: 8123
+      protocol: TCP
+    - name: native
+      port: 9000
+      targetPort: 9000
+      protocol: TCP

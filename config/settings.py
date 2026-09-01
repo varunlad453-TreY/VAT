@@ -57,6 +57,18 @@ class Settings(BaseSettings):
         description="Maximum retry attempts with exponential backoff via tenacity",
     )
 
+    # ClickHouse Hot Time-Series Settings
+    clickhouse_host: str = Field(default="localhost", description="ClickHouse host")
+    clickhouse_port: int = Field(default=8123, description="ClickHouse HTTP interface port")
+    clickhouse_database: str = Field(default="vat_telemetry", description="ClickHouse database")
+    clickhouse_user: str = Field(default="default", description="ClickHouse user")
+    clickhouse_password: str = Field(default="", description="ClickHouse password")
+
+    # Qdrant Distributed Vector RAG Settings
+    qdrant_host: str = Field(default="localhost", description="Qdrant host")
+    qdrant_port: int = Field(default=6333, description="Qdrant HTTP port")
+    qdrant_collection_name: str = Field(default="vendor_knowledge", description="Qdrant collection name")
+
     # LLM Settings (GitHub Models / OpenAI API)
     github_token: str = Field(default="", description="GitHub token for GitHub Models API")
     openai_api_key: str = Field(default="", description="OpenAI API key")
