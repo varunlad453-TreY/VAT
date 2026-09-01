@@ -1,18 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState, useEffect, useMemo } from "react";
 import { useNOCStore } from "@/store/useNOCStore";
 import { ParsedTelemetry, SeverityLevel } from "@/types/vat";
 import {
   ChevronRight,
   Filter,
   Inbox,
+  Pause,
+  Play,
   Plus,
   Radio,
+  RotateCcw,
   Search,
   Send,
   Zap,
 } from "lucide-react";
+
+const ROW_HEIGHT = 86; // Height in pixels for virtualized row calculation
+const OVERSCAN = 5;
 
 export function TelemetryFeed() {
   const telemetryFeed = useNOCStore((state) => state.telemetryFeed);
@@ -26,10 +32,15 @@ export function TelemetryFeed() {
   const setSearchQuery = useNOCStore((state) => state.setSearchQuery);
   const troubleshootIncident = useNOCStore((state) => state.troubleshootIncident);
   const loadDemoFixtures = useNOCStore((state) => state.loadDemoFixtures);
+  const clearFeed = useNOCStore((state) => state.clearFeed);
 
   const [customLogInput, setCustomLogInput] = useState("");
   const [customDevice, setCustomDevice] = useState("");
   const [showIngestBox, setShowIngestBox] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleManualIngest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,24 +55,47 @@ export function TelemetryFeed() {
     setShowIngestBox(false);
   };
 
-  const filteredLogs = telemetryFeed.filter((item) => {
-    if (filterVendor !== "all" && item.vendor.toLowerCase() !== filterVendor.toLowerCase()) {
-      return false;
-    }
-    if (filterSeverity !== "all" && item.severity.toUpperCase() !== filterSeverity.toUpperCase()) {
-      return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        item.raw_log.toLowerCase().includes(q) ||
-        item.device_id.toLowerCase().includes(q) ||
-        (item.event_code && item.event_code.toLowerCase().includes(q)) ||
-        (item.protocol && item.protocol.toLowerCase().includes(q))
-      );
-    }
-    return true;
-  });
+  const filteredLogs = useMemo(() => {
+    return telemetryFeed.filter((item) => {
+      if (filterVendor !== "all" && item.vendor.toLowerCase() !== filterVendor.toLowerCase()) {
+        return false;
+      }
+      if (filterSeverity !== "all" && item.severity.toUpperCase() !== filterSeverity.toUpperCase()) {
+        return false;
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          item.raw_log.toLowerCase().includes(q) ||
+          item.device_id.toLowerCase().includes(q) ||
+          (item.event_code && item.event_code.toLowerCase().includes(q)) ||
+          (item.protocol && item.protocol.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    });
+  }, [telemetryFeed, filterVendor, filterSeverity, searchQuery]);
+
+  // Virtual Window Calculation
+  const totalItems = filteredLogs.length;
+  const containerHeight = 600; // default estimated container height
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endIndex = Math.min(
+    totalItems,
+    Math.ceil((scrollTop + containerHeight) / ROW_HEIGHT) + OVERSCAN
+  );
+
+  const visibleItems = useMemo(() => {
+    return filteredLogs.slice(startIndex, endIndex).map((item, index) => ({
+      item,
+      index: startIndex + index,
+      top: (startIndex + index) * ROW_HEIGHT,
+    }));
+  }, [filteredLogs, startIndex, endIndex]);
+
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop(e.currentTarget.scrollTop);
+  };
 
   const getSeverityBorderColor = (severity: SeverityLevel) => {
     switch (severity) {
@@ -94,18 +128,35 @@ export function TelemetryFeed() {
       {/* Pane Header */}
       <div className="h-10 px-3 border-b border-[#172236] bg-[#090e18] flex items-center justify-between">
         <div className="flex items-center space-x-2 text-slate-300 font-semibold tracking-wider text-[11px] uppercase">
-          <Radio className="w-3.5 h-3.5 text-cyan-400" />
-          <span>TELEMETRY INGESTION STREAM</span>
+          <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+          <span>TELEMETRY STREAM</span>
+          <span className="bg-[#111c2e] text-cyan-400 px-1.5 py-0.2 rounded text-[10px]">
+            {filteredLogs.length}
+          </span>
         </div>
 
-        <button
-          onClick={() => setShowIngestBox(!showIngestBox)}
-          className="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center space-x-0.5"
-          title="Submit Live Raw Telemetry"
-        >
-          <Plus className="w-3 h-3" />
-          <span>INGEST</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => setIsPaused(!isPaused)}
+            className={`text-[11px] flex items-center space-x-0.5 px-1.5 py-0.5 rounded border ${
+              isPaused
+                ? "bg-amber-950/40 border-amber-600/40 text-amber-400"
+                : "border-[#1e2c45] text-slate-400 hover:text-slate-200"
+            }`}
+            title={isPaused ? "Resume Stream" : "Pause Stream"}
+          >
+            {isPaused ? <Play className="w-2.5 h-2.5" /> : <Pause className="w-2.5 h-2.5" />}
+          </button>
+
+          <button
+            onClick={() => setShowIngestBox(!showIngestBox)}
+            className="text-[11px] bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 flex items-center space-x-0.5"
+            title="Submit Live Raw Telemetry"
+          >
+            <Plus className="w-3 h-3" />
+            <span>INGEST</span>
+          </button>
+        </div>
       </div>
 
       {/* Manual Ingestion Input Area */}
@@ -177,8 +228,13 @@ export function TelemetryFeed() {
         </div>
       </div>
 
-      {/* High-Density Log Row Stream (No Cards) */}
-      <div className="flex-1 overflow-y-auto divide-y divide-[#121927]">
+      {/* Virtualized Stream Viewport (Renders only ~30 active DOM rows for 100k+ scale) */}
+      <div
+        ref={containerRef}
+        onScroll={onScroll}
+        className="flex-1 overflow-y-auto relative"
+        style={{ height: "100%" }}
+      >
         {filteredLogs.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center p-6 text-center text-slate-500 space-y-2">
             <Inbox className="w-6 h-6 text-slate-700" />
@@ -186,73 +242,80 @@ export function TelemetryFeed() {
               Live Stream Awaiting Telemetry
             </div>
             <p className="text-[10px] text-slate-600 max-w-xs leading-relaxed">
-              No telemetry received yet. Stream live multi-vendor syslogs via WebSocket or click <b>INGEST</b>.
+              No telemetry received yet. Stream live multi-vendor syslogs via Vector / Redpanda or click <b>INGEST</b>.
             </p>
             <button
               onClick={loadDemoFixtures}
               className="mt-2 text-[10px] text-amber-400 hover:text-amber-300 underline"
             >
-              Load Demo Fixtures
+              Load Multi-Vendor Fixtures
             </button>
           </div>
         ) : (
-          filteredLogs.map((item, idx) => {
-            const isSelected = activeIncident?.raw_log === item.raw_log;
+          <div style={{ height: `${totalItems * ROW_HEIGHT}px`, position: "relative" }}>
+            {visibleItems.map(({ item, index, top }) => {
+              const isSelected = activeIncident?.raw_log === item.raw_log;
 
-            return (
-              <div
-                key={idx}
-                onClick={() => selectIncident(item)}
-                className={`p-3 cursor-pointer transition border-l-2 ${getSeverityBorderColor(
-                  item.severity
-                )} ${
-                  isSelected
-                    ? "bg-[#0f1729] text-white"
-                    : "hover:bg-[#0b101c] text-slate-300"
-                }`}
-              >
-                {/* Meta Header */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
-                  <div className="flex items-center space-x-1.5 font-semibold">
-                    <span className="text-slate-200 uppercase">{item.vendor}</span>
-                    <span className="text-slate-600">·</span>
-                    <span className="text-slate-300">{item.device_id}</span>
+              return (
+                <div
+                  key={index}
+                  onClick={() => selectIncident(item)}
+                  style={{
+                    position: "absolute",
+                    top: `${top}px`,
+                    left: 0,
+                    right: 0,
+                    height: `${ROW_HEIGHT}px`,
+                  }}
+                  className={`p-3 cursor-pointer transition border-l-2 border-b border-[#121927] ${getSeverityBorderColor(
+                    item.severity
+                  )} ${
+                    isSelected
+                      ? "bg-[#0f1729] text-white"
+                      : "hover:bg-[#0b101c] text-slate-300"
+                  }`}
+                >
+                  {/* Meta Header */}
+                  <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1">
+                    <div className="flex items-center space-x-1.5 font-semibold">
+                      <span className="text-slate-200 uppercase">{item.vendor}</span>
+                      <span className="text-slate-600">·</span>
+                      <span className="text-slate-300">{item.device_id}</span>
+                    </div>
+
+                    <div className="flex items-center space-x-1">
+                      <span className={`font-bold ${getSeverityDot(item.severity)}`}>
+                        ● {item.severity}
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center space-x-1">
-                    <span className={`font-bold ${getSeverityDot(item.severity)}`}>
-                      ● {item.severity}
-                    </span>
+                  {/* Raw Log Line */}
+                  <div className="text-[11px] leading-relaxed line-clamp-1 text-slate-300 font-mono">
+                    {item.raw_log}
                   </div>
-                </div>
 
-                {/* Raw Log Line */}
-                <div className="text-[11px] leading-relaxed line-clamp-2 text-slate-300 font-mono">
-                  {item.raw_log}
-                </div>
+                  {/* Meta Footer */}
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1">
+                    <div className="flex items-center space-x-2">
+                      {item.protocol && (
+                        <span className="uppercase text-cyan-500 font-medium">
+                          {item.protocol}
+                        </span>
+                      )}
+                      {item.peer_ip && <span>IP: {item.peer_ip}</span>}
+                    </div>
 
-                {/* Meta Footer */}
-                <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5">
-                  <div className="flex items-center space-x-2">
-                    {item.protocol && (
-                      <span className="uppercase text-cyan-500 font-medium">
-                        {item.protocol}
+                    {isSelected && (
+                      <span className="text-cyan-400 font-semibold flex items-center">
+                        Inspecting <ChevronRight className="w-2.5 h-2.5 ml-0.5" />
                       </span>
                     )}
-                    {item.peer_ip && (
-                      <span>IP: {item.peer_ip}</span>
-                    )}
                   </div>
-
-                  {isSelected && (
-                    <span className="text-cyan-400 font-semibold flex items-center">
-                      Inspecting <ChevronRight className="w-2.5 h-2.5 ml-0.5" />
-                    </span>
-                  )}
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </div>
     </aside>
