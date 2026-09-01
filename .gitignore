@@ -24,9 +24,10 @@ env/
 .env.local
 frontend/.env.local
 
-# Testing and IDEs
+# Testing, Scripts and Scratch
 .pytest_cache/
 .vscode/
+scripts/
 scratch/
 nul
 
