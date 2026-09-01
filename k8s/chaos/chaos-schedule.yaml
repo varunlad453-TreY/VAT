@@ -1,0 +1,58 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: vat-staging-resiliency-schedule
+  namespace: vat-staging
+  labels:
+    app.kubernetes.io/name: vat-chaos-schedule
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  schedule: "0 */4 * * *" # Run resilience proving suite every 4 hours in staging
+  concurrencyPolicy: Forbid
+  historyLimit: 5
+  type: Workflow
+  workflow:
+    entry: carrier-resilience-proving-workflow
+    templates:
+      - name: carrier-resilience-proving-workflow
+        templateType: Serial
+        children:
+          - redpanda-leader-kill-step
+          - recovery-cooldown-step
+          - clickhouse-partition-step
+
+      - name: redpanda-leader-kill-step
+        templateType: PodChaos
+        podChaos:
+          action: pod-kill
+          mode: one
+          selector:
+            namespaces:
+              - vat-staging
+            labelSelectors:
+              app.kubernetes.io/name: vat-redpanda
+
+      - name: recovery-cooldown-step
+        templateType: Suspend
+        suspend:
+          duration: "45s"
+
+      - name: clickhouse-partition-step
+        templateType: NetworkChaos
+        networkChaos:
+          action: partition
+          mode: all
+          selector:
+            namespaces:
+              - vat-staging
+            labelSelectors:
+              app.kubernetes.io/name: vat-clickhouse
+          direction: both
+          target:
+            selector:
+              namespaces:
+                - vat-staging
+              labelSelectors:
+                app.kubernetes.io/name: vat-redpanda
+            mode: all
+          duration: "60s"

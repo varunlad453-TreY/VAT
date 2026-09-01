@@ -1,0 +1,19 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: redpanda-leader-kill-chaos
+  namespace: vat-staging
+  labels:
+    app.kubernetes.io/name: redpanda-chaos
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - vat-staging
+    labelSelectors:
+      app.kubernetes.io/name: vat-redpanda
+  scheduler:
+    cron: "@every 2m"
+  duration: "30s"
