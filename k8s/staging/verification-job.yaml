@@ -1,0 +1,36 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vat-staging-verification-probe
+  namespace: vat-staging
+  labels:
+    app.kubernetes.io/name: vat-staging-verification
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 3
+  template:
+    metadata:
+      name: vat-staging-verification
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: verification-agent
+          image: alpine/curl:8.7.1
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -e
+              echo "=== 1. Probing Staging ClickHouse HTTP Ping ==="
+              curl -s -f http://vat-clickhouse-staging-service.vat-staging.svc.cluster.local:8123/ping || (echo "ClickHouse Offline" && exit 1)
+              echo "ClickHouse Staging Ping: OK"
+
+              echo "=== 2. Probing Staging ClickHouse Query Execution ==="
+              CH_RES=$(curl -s -d "SELECT 1" http://vat-clickhouse-staging-service.vat-staging.svc.cluster.local:8123/)
+              echo "ClickHouse Query Result: ${CH_RES}"
+
+              echo "=== 3. Probing Redpanda Staging Admin Interface ==="
+              curl -s -f http://vat-redpanda-staging-service.vat-staging.svc.cluster.local:9644/v1/status/ready || (echo "Redpanda Admin Offline" && exit 1)
+              echo "Redpanda Staging Status: READY"
+
+              echo "=== VERIFICATION SUITE PASSED (ClickHouse + Redpanda OK) ==="

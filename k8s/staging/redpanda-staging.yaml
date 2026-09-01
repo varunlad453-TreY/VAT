@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vat-staging
+  labels:
+    app.kubernetes.io/environment: staging
+    app.kubernetes.io/part-of: vat-enterprise
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vat-redpanda-staging
+  namespace: vat-staging
+  labels:
+    app.kubernetes.io/name: vat-redpanda
+    app.kubernetes.io/environment: staging
+spec:
+  serviceName: vat-redpanda-staging-headless
+  replicas: 3
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-redpanda
+      app.kubernetes.io/environment: staging
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vat-redpanda
+        app.kubernetes.io/environment: staging
+    spec:
+      containers:
+        - name: redpanda
+          image: docker.redpanda.com/redpandadata/redpanda:v23.3.14
+          command:
+            - rpk
+            - redpanda
+            - start
+            - --smp=1
+            - --memory=2G
+            - --reserve-memory=250M
+            - --overprovisioned
+            - --node-id=$(POD_INDEX)
+            - --kafka-addr=PLAINTEXT://0.0.0.0:9092
+            - --advertise-kafka-addr=PLAINTEXT://vat-redpanda-staging-$(POD_INDEX).vat-redpanda-staging-headless.vat-staging.svc.cluster.local:9092
+            - --rpc-addr=0.0.0.0:33145
+            - --advertise-rpc-addr=vat-redpanda-staging-$(POD_INDEX).vat-redpanda-staging-headless.vat-staging.svc.cluster.local:33145
+            - --admin-addr=0.0.0.0:9644
+          ports:
+            - name: kafka
+              containerPort: 9092
+            - name: admin
+              containerPort: 9644
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "2Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          readinessProbe:
+            httpGet:
+              path: /v1/status/ready
+              port: 9644
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: datadir
+              mountPath: /var/lib/redpanda/data
+  volumeClaimTemplates:
+    - metadata:
+        name: datadir
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-redpanda-staging-service
+  namespace: vat-staging
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vat-redpanda
+    app.kubernetes.io/environment: staging
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: admin
+      port: 9644
+      targetPort: 9644
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-redpanda-staging-headless
+  namespace: vat-staging
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: vat-redpanda
+    app.kubernetes.io/environment: staging
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: rpc
+      port: 33145
+      targetPort: 33145
