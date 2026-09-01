@@ -1,0 +1,52 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: vat-enterprise-appset
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: vat-enterprise-appset
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  generators:
+    - list:
+        elements:
+          - env: staging
+            namespace: vat-staging
+            targetRevision: main
+            cluster: https://kubernetes.default.svc
+          - env: production
+            namespace: vat-system
+            targetRevision: main
+            cluster: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: 'vat-{{env}}'
+      namespace: argocd
+      labels:
+        environment: '{{env}}'
+      annotations:
+        notifications.argoproj.io/subscribe.on-deployed.slack: '#vat-deployments'
+        notifications.argoproj.io/subscribe.on-health-degraded.slack: '#vat-sre-alerts'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/varunlad453-TreY/VAT.git
+        targetRevision: '{{targetRevision}}'
+        path: k8s
+      destination:
+        server: '{{cluster}}'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ApplyOutOfSyncOnly=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 5
+          backoff:
+            duration: 10s
+            factor: 2
+            maxDuration: 5m
