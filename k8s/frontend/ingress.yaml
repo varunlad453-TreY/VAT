@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-noc-frontend-service
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-noc-frontend-service
+    app.kubernetes.io/component: ui-gateway
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: vat-noc-frontend
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vat-enterprise-ingress
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-enterprise-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/websocket-services: vat-backend-service
+spec:
+  rules:
+    - host: noc.vat.enterprise.internal
+      http:
+        paths:
+          # Real-time WebSocket Traffic -> Backend
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: vat-backend-service
+                port:
+                  number: 8000
+          # REST API Control Plane -> Backend
+          - path: /troubleshoot
+            pathType: Prefix
+            backend:
+              service:
+                name: vat-backend-service
+                port:
+                  number: 8000
+          - path: /telemetry
+            pathType: Prefix
+            backend:
+              service:
+                name: vat-backend-service
+                port:
+                  number: 8000
+          # UI Traffic (Next.js Strangler Fig Gateway)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vat-noc-frontend-service
+                port:
+                  number: 3000

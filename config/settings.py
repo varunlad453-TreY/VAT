@@ -44,6 +44,18 @@ class Settings(BaseSettings):
     # Vector Embedding Settings
     embedding_model: str = Field(default="all-MiniLM-L6-v2", description="SentenceTransformer model name")
     embedding_dimension: int = Field(default=384, description="Vector dimension size")
+    embedding_service_url: str = Field(
+        default="http://localhost:8001",
+        description="URL of dedicated standalone embedding microservice",
+    )
+    embedding_timeout_seconds: float = Field(
+        default=2.0,
+        description="HTTP request timeout for remote embedding microservice in seconds",
+    )
+    embedding_max_retries: int = Field(
+        default=3,
+        description="Maximum retry attempts with exponential backoff via tenacity",
+    )
 
     # LLM Settings (GitHub Models / OpenAI API)
     github_token: str = Field(default="", description="GitHub token for GitHub Models API")

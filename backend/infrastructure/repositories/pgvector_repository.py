@@ -24,6 +24,10 @@ class AsyncpgVectorRepository(IVectorRepository):
         """Generate normalized 384-dimensional vector embedding."""
         return self._fallback_repo.embed_text(text)
 
+    async def embed_text_async(self, text: str) -> List[float]:
+        """Asynchronously generate normalized 384-dimensional vector embedding."""
+        return await self._fallback_repo.embed_text_async(text)
+
     async def find_relevant_docs(
         self,
         query_text: str,
@@ -36,7 +40,7 @@ class AsyncpgVectorRepository(IVectorRepository):
         Combines pgvector HNSW Cosine Similarity (Dense, 0.65) with
         PostgreSQL tsvector Full-Text Search (Sparse BM25, 0.35).
         """
-        embedding = self.embed_text(query_text)
+        embedding = await self.embed_text_async(query_text)
         emb_str = str(embedding)
 
         v_filter = vendor.lower() if vendor and vendor.lower() not in ["generic", "multi_vendor", "all"] else None

@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: vat-embedding-worker-pdb
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: vat-embedding-worker-pdb
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-embedding-worker

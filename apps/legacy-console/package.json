@@ -1,0 +1,12 @@
+{
+  "name": "@vat/legacy-console",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx serve -p 3001 ./public",
+    "start": "npx serve -p 3001 ./public"
+  },
+  "devDependencies": {
+    "serve": "^14.2.1"
+  }
+}

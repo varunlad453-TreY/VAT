@@ -114,46 +114,22 @@ ENTERPRISE_FALLBACK_CORPUS: List[Dict[str, Any]] = [
 ]
 
 
+from backend.infrastructure.adapters.remote_embedding_client import embedding_client
+
+
 class InMemoryVectorRepository(IVectorRepository):
     """In-memory fallback implementation of IVectorRepository for air-gapped operations."""
 
     def __init__(self, corpus: Optional[List[Dict[str, Any]]] = None) -> None:
         self._corpus: List[Dict[str, Any]] = list(corpus if corpus is not None else ENTERPRISE_FALLBACK_CORPUS)
-        self._model = None
-        self._model_load_attempted = False
-
-    def _get_model(self):
-        """Lazy load SentenceTransformer model if available."""
-        if not self._model_load_attempted:
-            self._model_load_attempted = True
-            try:
-                from sentence_transformers import SentenceTransformer
-                settings = get_settings()
-                self._model = SentenceTransformer(settings.embedding_model)
-            except Exception as exc:
-                logger.debug("SentenceTransformer load skipped (%s). Using deterministic vector generator.", exc)
-                self._model = None
-        return self._model
 
     def embed_text(self, text: str) -> List[float]:
-        """Generate normalized 384-dimensional vector embedding."""
-        model = self._get_model()
-        if model is not None:
-            try:
-                emb = model.encode([text], show_progress_bar=False, convert_to_numpy=True)[0]
-                return emb.tolist()
-            except Exception as exc:
-                logger.warning("Embedding error with SentenceTransformer: %s", exc)
+        """Generate normalized 384-dimensional vector embedding via remote client or deterministic fallback."""
+        return embedding_client.embed_text_sync(text)
 
-        # Deterministic 384-dim normalized pseudo-embedding
-        vec = []
-        clean_text = text.lower().strip()
-        for i in range(384):
-            h = hashlib.sha256(f"{clean_text}_{i}".encode("utf-8")).hexdigest()
-            val = (int(h[:8], 16) / 0xFFFFFFFF) * 2.0 - 1.0
-            vec.append(val)
-        norm = math.sqrt(sum(x * x for x in vec)) or 1.0
-        return [x / norm for x in vec]
+    async def embed_text_async(self, text: str) -> List[float]:
+        """Asynchronously generate normalized 384-dimensional vector embedding."""
+        return await embedding_client.embed_text(text)
 
     async def find_relevant_docs(
         self,

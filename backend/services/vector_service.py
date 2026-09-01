@@ -108,39 +108,17 @@ class VectorService:
     """Enterprise Hybrid Vector (Dense) & Lexical (Sparse) Search Service."""
 
     def __init__(self) -> None:
-        self._model = None
-        self._model_load_attempted = False
-
-    def _get_model(self):
-        """Lazy load SentenceTransformer model."""
-        if not self._model_load_attempted:
-            self._model_load_attempted = True
-            try:
-                from sentence_transformers import SentenceTransformer
-                settings = get_settings()
-                self._model = SentenceTransformer(settings.embedding_model)
-            except Exception as exc:
-                logger.warning("SentenceTransformer load skipped or unavailable (%s). Using deterministic dense vector generator.", exc)
-                self._model = None
-        return self._model
+        pass
 
     def embed_text(self, text: str) -> List[float]:
-        """Generate 384-dimensional normalized vector embedding."""
-        model = self._get_model()
-        if model is not None:
-            try:
-                emb = model.encode([text], show_progress_bar=False, convert_to_numpy=True)[0]
-                return emb.tolist()
-            except Exception as exc:
-                logger.warning("Embedding error with SentenceTransformer: %s", exc)
+        """Generate 384-dimensional normalized vector embedding via remote embedding client."""
+        from backend.infrastructure.adapters.remote_embedding_client import embedding_client
+        return embedding_client.embed_text_sync(text)
 
-        vec = []
-        for i in range(384):
-            h = hashlib.sha256(f"{text.lower().strip()}_{i}".encode("utf-8")).hexdigest()
-            val = (int(h[:8], 16) / 0xFFFFFFFF) * 2.0 - 1.0
-            vec.append(val)
-        norm = math.sqrt(sum(x * x for x in vec)) or 1.0
-        return [x / norm for x in vec]
+    async def embed_text_async(self, text: str) -> List[float]:
+        """Asynchronously generate normalized vector embedding."""
+        from backend.infrastructure.adapters.remote_embedding_client import embedding_client
+        return await embedding_client.embed_text(text)
 
     async def find_relevant_docs(
         self,
