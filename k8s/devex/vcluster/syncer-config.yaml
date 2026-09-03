@@ -1,0 +1,81 @@
+# vcluster Syncer Service Export / Import Configuration
+# Bridges Host-Plane Shared Staging Infrastructure into Virtual Clusters
+# Virtual pods address local Service names while traffic securely routes to Host Staging Core
+
+---
+# 1. Virtual Redpanda Proxy Service (Inside vcluster)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-redpanda
+  namespace: default
+  labels:
+    app.kubernetes.io/name: vat-redpanda-bridge
+    vcluster.loft.sh/synced: "true"
+spec:
+  type: ExternalName
+  externalName: vat-redpanda-headless.vat-redpanda.svc.cluster.local
+  ports:
+    - name: kafka-tcp
+      port: 9092
+      protocol: TCP
+
+---
+# 2. Virtual ClickHouse Analytics Service (Inside vcluster)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-clickhouse
+  namespace: default
+  labels:
+    app.kubernetes.io/name: vat-clickhouse-bridge
+    vcluster.loft.sh/synced: "true"
+spec:
+  type: ExternalName
+  externalName: vat-clickhouse-service.vat-storage.svc.cluster.local
+  ports:
+    - name: http-interface
+      port: 8123
+      protocol: TCP
+    - name: native-client
+      port: 9000
+      protocol: TCP
+
+---
+# 3. Virtual PostgreSQL Transactional Service (Inside vcluster)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-postgres
+  namespace: default
+  labels:
+    app.kubernetes.io/name: vat-postgres-bridge
+    vcluster.loft.sh/synced: "true"
+spec:
+  type: ExternalName
+  externalName: vat-postgres-service.vat-storage.svc.cluster.local
+  ports:
+    - name: postgresql
+      port: 5432
+      protocol: TCP
+
+---
+# 4. Virtual Qdrant Vector Store Service (Inside vcluster)
+apiVersion: v1
+kind: Service
+metadata:
+  name: vat-qdrant
+  namespace: default
+  labels:
+    app.kubernetes.io/name: vat-qdrant-bridge
+    vcluster.loft.sh/synced: "true"
+spec:
+  type: ExternalName
+  externalName: vat-qdrant-service.vat-storage.svc.cluster.local
+  ports:
+    - name: grpc
+      port: 6334
+      protocol: TCP
+    - name: http
+      port: 6333
+      protocol: TCP

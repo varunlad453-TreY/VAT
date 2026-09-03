@@ -1,0 +1,55 @@
+# KEDA ScaledObject: GPU Auto-Scaling to Zero for Embedding Worker
+# Pillar: FinOps - Zero Idle Compute Billing on GPU Nodes
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: vat-embedding-worker-scaler
+  namespace: vat-embedding
+  labels:
+    app.kubernetes.io/name: vat-embedding-worker-scaler
+    app.kubernetes.io/part-of: vat-enterprise
+    app.kubernetes.io/component: inference-autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: vat-embedding-worker
+
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: 0
+  maxReplicaCount: 8
+
+  advanced:
+    restoreToOriginalReplicaCount: false
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+            - type: Percent
+              value: 100
+              periodSeconds: 15
+            - type: Pods
+              value: 4
+              periodSeconds: 15
+          selectPolicy: Max
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 60
+          selectPolicy: Min
+
+  triggers:
+    - type: kafka
+      metadata:
+        bootstrapServers: "vat-redpanda-headless.vat-redpanda.svc.cluster.local:9092"
+        consumerGroup: "vat-embedding-worker"
+        topic: "vat.telemetry.parsed"
+        lagThreshold: "1000"
+        activationLagThreshold: "1"
+        offsetResetPolicy: "latest"
+      authenticationRef:
+        name: keda-redpanda-trigger-auth

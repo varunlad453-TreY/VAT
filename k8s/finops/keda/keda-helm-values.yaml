@@ -1,0 +1,92 @@
+# KEDA (Kubernetes Event-driven Autoscaling) 2.14+ Production Helm Values
+# Repository: https://kedacore.github.io/charts
+# Release: keda
+# Namespace: keda
+
+image:
+  keda:
+    repository: ghcr.io/kedacore/keda
+    tag: 2.14.0
+  metricsApiServer:
+    repository: ghcr.io/kedacore/keda-metrics-apiserver
+    tag: 2.14.0
+  webhooks:
+    repository: ghcr.io/kedacore/keda-admission-webhooks
+    tag: 2.14.0
+
+operator:
+  replicaCount: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: keda-operator
+            topologyKey: topology.kubernetes.io/zone
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 10001
+    capabilities:
+      drop:
+        - ALL
+
+metricsServer:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+    runAsUser: 10001
+    capabilities:
+      drop:
+        - ALL
+
+webhooks:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+prometheus:
+  metricServer:
+    enabled: true
+    port: 9022
+    serviceMonitor:
+      enabled: true
+      interval: 15s
+  operator:
+    enabled: true
+    port: 8080
+    serviceMonitor:
+      enabled: true
+      interval: 15s
+
+logging:
+  operator:
+    level: info
+    format: json
+  metricServer:
+    level: info
+    format: json

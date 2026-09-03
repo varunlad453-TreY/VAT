@@ -1,0 +1,43 @@
+# Karpenter v0.35+ EC2NodeClass: AWS Provider Specification
+# Configures Subnets, Security Groups, AMI Family, Storage, and IMDSv2
+apiVersion: karpenter.k8s.aws/v1beta1
+kind: EC2NodeClass
+metadata:
+  name: default-aws-nodeclass
+  labels:
+    app.kubernetes.io/name: default-aws-nodeclass
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  amiFamily: AL2023
+  role: "KarpenterNodeRole-vat-enterprise-cluster"
+
+  subnetSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "vat-enterprise-cluster"
+
+  securityGroupSelectorTerms:
+    - tags:
+        karpenter.sh/discovery: "vat-enterprise-cluster"
+
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 80Gi
+        volumeType: gp3
+        iops: 3000
+        throughput: 125
+        encrypted: true
+        deleteOnTermination: true
+
+  # Enforce IMDSv2 for Zero-Trust Instance Metadata Security
+  metadataOptions:
+    httpEndpoint: enabled
+    httpProtocolIPv6: disabled
+    httpPutResponseHopLimit: 2
+    httpTokens: required
+
+  tags:
+    Name: "karpenter.sh/vat-enterprise-node"
+    Environment: "production"
+    Project: "vat-enterprise"
+    FinOpsManaged: "karpenter"

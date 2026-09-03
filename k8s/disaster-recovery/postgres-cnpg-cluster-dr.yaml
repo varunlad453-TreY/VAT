@@ -1,0 +1,65 @@
+# CloudNativePG (CNPG) 1.23+ Replica Cluster: Multi-Region PostgreSQL DR
+# Standby Region: AWS Hyderabad (ap-south-2) continuous replication from Mumbai (ap-south-1)
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: vat-postgres-dr-cluster
+  namespace: vat-storage
+  labels:
+    app.kubernetes.io/name: vat-postgres-dr
+    app.kubernetes.io/part-of: vat-enterprise
+    vat.enterprise/dr-role: standby-cluster
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:16.2
+
+  # Standby replica cluster mode: continuously pulls WALs from S3 & streams from primary
+  replica:
+    enabled: true
+    source: mumbai-primary
+
+  bootstrap:
+    recovery:
+      source: mumbai-backup
+
+  externalClusters:
+    # 1. Physical Streaming Replication directly from Mumbai Primary
+    - name: mumbai-primary
+      connectionParameters:
+        host: postgres-primary.ap-south-1.internal
+        user: streaming_replica
+        dbname: postgres
+        sslmode: verify-full
+      sslKey:
+        name: vat-postgres-replication-tls
+        key: tls.key
+      sslCert:
+        name: vat-postgres-replication-tls
+        key: tls.crt
+      sslRootCert:
+        name: vat-postgres-replication-tls
+        key: ca.crt
+    # 2. Asynchronous S3 Barman Object Store Fallback (Cross-Region Replicated Bucket)
+    - name: mumbai-backup
+      barmanObjectStore:
+        destinationPath: "s3://vat-enterprise-postgres-dr-ap-south-2/wal-archive/"
+        endpointURL: "https://s3.ap-south-2.amazonaws.com"
+        s3Credentials:
+          inheritFromIAMRole: true
+        wal:
+          maxParallel: 4
+
+  storage:
+    size: 100Gi
+    storageClass: gp3
+
+  resources:
+    requests:
+      cpu: 1000m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 16Gi
+
+  monitoring:
+    enablePodMonitor: true

@@ -1,0 +1,46 @@
+# Karpenter v0.35+ NodePool: Spot Instance Fleet for Stateless Workloads
+# Pillar: FinOps - ~70% Compute Cost Reduction via Spot Arbitrage
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: spot-stateless
+  labels:
+    app.kubernetes.io/name: spot-stateless-nodepool
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  template:
+    metadata:
+      labels:
+        karpenter.sh/capacity-type: spot
+        vat.enterprise/workload-tier: stateless
+    spec:
+      nodeClassRef:
+        name: default-aws-nodeclass
+      requirements:
+        # Strictly provision Spot instances for interruptible compute
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot"]
+        # Diversify across compute-optimized and GPU-accelerated instance families
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["c6i", "c7i", "c6a", "g4dn", "g5"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["xlarge", "2xlarge", "4xlarge"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
+
+  disruption:
+    # Aggressive auto-consolidation to eliminate idle cloud spend
+    consolidationPolicy: WhenUnderutilized
+    consolidateAfter: 30s
+    expireAfter: 720h # 30-day graceful instance rotation
+
+  limits:
+    cpu: "128"
+    memory: 512Gi

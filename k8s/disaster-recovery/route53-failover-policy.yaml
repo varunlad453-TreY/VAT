@@ -1,0 +1,84 @@
+# AWS Route53 & ExternalDNS Automated Multi-Region Failover Architecture
+# Active-Passive Routing: Primary (Mumbai ap-south-1) -> Secondary DR (Hyderabad ap-south-2)
+# Target SLA: Recovery Time Objective (RTO) < 60s
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: vat-enterprise-dr-ingress
+  namespace: vat-system
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "10"
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+    alb.ingress.kubernetes.io/unhealthy-threshold-count: "2"
+    # ExternalDNS Route53 Failover Configuration
+    external-dns.alpha.kubernetes.io/hostname: api.vat-enterprise.internal
+    external-dns.alpha.kubernetes.io/ttl: "10"
+    external-dns.alpha.kubernetes.io/set-identifier: "hyderabad-secondary-dr"
+    external-dns.alpha.kubernetes.io/aws-failover: "SECONDARY"
+    external-dns.alpha.kubernetes.io/aws-region: "ap-south-2"
+spec:
+  rules:
+    - host: api.vat-enterprise.internal
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: vat-backend-service
+                port:
+                  number: 8000
+---
+# Declarative Route53 Health Check & Application Recovery Controller (ARC) Spec
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: route53-dr-routing-policy
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: route53-dr-policy
+    app.kubernetes.io/part-of: vat-enterprise
+data:
+  dns_failover_policy.json: |
+    {
+      "Comment": "VAT Enterprise Automated Multi-Region Active-Passive DNS Failover",
+      "Changes": [
+        {
+          "Action": "UPSERT",
+          "ResourceRecordSet": {
+            "Name": "api.vat-enterprise.internal.",
+            "Type": "A",
+            "SetIdentifier": "mumbai-primary",
+            "Failover": "PRIMARY",
+            "TTL": 10,
+            "ResourceRecords": [
+              {
+                "Value": "10.0.10.15"
+              }
+            ],
+            "HealthCheckId": "hc-vat-mumbai-primary-ap-south-1"
+          }
+        },
+        {
+          "Action": "UPSERT",
+          "ResourceRecordSet": {
+            "Name": "api.vat-enterprise.internal.",
+            "Type": "A",
+            "SetIdentifier": "hyderabad-secondary-dr",
+            "Failover": "SECONDARY",
+            "TTL": 10,
+            "ResourceRecords": [
+              {
+                "Value": "10.1.10.25"
+              }
+            ]
+          }
+        }
+      ]
+    }

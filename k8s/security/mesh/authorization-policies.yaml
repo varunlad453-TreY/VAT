@@ -1,0 +1,192 @@
+# ==============================================================================
+# Zero-Trust Authorization Policies
+# Principle: Default Deny across all namespaces + Strict Cryptographic SPIFFE Whitelisting
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. DEFAULT DENY ALL INGRESS: vat-redpanda
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redpanda-default-deny-all
+  namespace: vat-redpanda
+spec:
+  {} # Empty spec activates default deny for all workloads in namespace
+---
+# ------------------------------------------------------------------------------
+# 2. EXPLICIT DENY NON-mTLS TRAFFIC: vat-redpanda
+# Instantly drops any connection lacking a cryptographically valid client certificate
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redpanda-deny-unencrypted-plaintext
+  namespace: vat-redpanda
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-redpanda
+  action: DENY
+  rules:
+    - from:
+        - source:
+            notPrincipals: ["*"]
+---
+# ------------------------------------------------------------------------------
+# 3. LEAST-PRIVILEGE WHITELIST: vat-redpanda
+# Only allows Vector ingestion and Embedding-Worker consumption on port 9092
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: redpanda-authorized-traffic-whitelist
+  namespace: vat-redpanda
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-redpanda
+  action: ALLOW
+  rules:
+    # Rule 1: Allow Vector DaemonSet to stream normalized telemetry into Kafka brokers
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-vector/sa/vat-vector-sa"
+      to:
+        - operation:
+            ports: ["9092"]
+
+    # Rule 2: Allow Decoupled Embedding Workers to consume telemetry batches
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-embedding/sa/vat-embedding-sa"
+      to:
+        - operation:
+            ports: ["9092"]
+
+    # Rule 3: Allow Intra-Broker Redpanda Raft Replication & RPC consensus
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-redpanda/sa/vat-redpanda-sa"
+      to:
+        - operation:
+            ports: ["9092", "33145", "9644"]
+
+    # Rule 4: Allow Prometheus scraping from monitoring namespace on metrics endpoint
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/monitoring/sa/prometheus-k8s"
+      to:
+        - operation:
+            ports: ["9644"]
+            paths: ["/public_metrics"]
+            methods: ["GET"]
+---
+# ------------------------------------------------------------------------------
+# 4. DEFAULT DENY ALL INGRESS: vat-embedding
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: embedding-default-deny-all
+  namespace: vat-embedding
+spec:
+  {}
+---
+# ------------------------------------------------------------------------------
+# 5. LEAST-PRIVILEGE WHITELIST: vat-embedding
+# Only allows backend API and orchestrator to invoke vector embedding inference
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: embedding-authorized-whitelist
+  namespace: vat-embedding
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vat-embedding-worker
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-system/sa/vat-backend-sa"
+      to:
+        - operation:
+            ports: ["8001"]
+            paths: ["/embed", "/embed/batch", "/health"]
+            methods: ["POST", "GET"]
+---
+# ------------------------------------------------------------------------------
+# 6. DEFAULT DENY ALL INGRESS: vat-storage
+# Completely isolates PostgreSQL, ClickHouse, and Qdrant
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: storage-default-deny-all
+  namespace: vat-storage
+spec:
+  {}
+---
+# ------------------------------------------------------------------------------
+# 7. LEAST-PRIVILEGE WHITELIST: vat-storage (Postgres, ClickHouse, Qdrant)
+# Explicitly blocks direct edge access; allows only backend API & migrator
+# ------------------------------------------------------------------------------
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: storage-authorized-whitelist
+  namespace: vat-storage
+spec:
+  action: ALLOW
+  rules:
+    # Allow Backend API to PostgreSQL (5432)
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-system/sa/vat-backend-sa"
+      to:
+        - operation:
+            ports: ["5432"]
+
+    # Allow Alembic Migrator Job to PostgreSQL during PreSync
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-system/sa/vat-migrator-sa"
+      to:
+        - operation:
+            ports: ["5432"]
+
+    # Allow Backend API to ClickHouse (8123 HTTP / 9000 Native)
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-system/sa/vat-backend-sa"
+      to:
+        - operation:
+            ports: ["8123", "9000"]
+
+    # Allow ClickHouse Kafka Engine to connect out to Redpanda (intra-mesh sink)
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-storage/sa/vat-clickhouse-sa"
+      to:
+        - operation:
+            ports: ["8123", "9000"]
+
+    # Allow Backend API to Qdrant Vector Search (6333 HTTP)
+    - from:
+        - source:
+            principals:
+              - "spiffe://cluster.local/ns/vat-system/sa/vat-backend-sa"
+      to:
+        - operation:
+            ports: ["6333"]

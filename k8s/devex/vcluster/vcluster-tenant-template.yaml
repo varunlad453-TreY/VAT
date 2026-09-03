@@ -1,0 +1,101 @@
+# Virtual Cluster Tenant Template: On-Demand Engineer Sandbox Provisioner
+# Tenant: dev-alice
+# Purpose: Instantly provision a safe, isolated EKS development sandbox in <5 minutes
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: vcluster-dev-alice
+  labels:
+    app.kubernetes.io/managed-by: vcluster
+    vat.enterprise/environment: development
+    vat.enterprise/tenant: dev-alice
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-alice-quota
+  namespace: vcluster-dev-alice
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    count/pods: "20"
+    count/services: "10"
+    count/persistentvolumeclaims: "4"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-alice-limits
+  namespace: vcluster-dev-alice
+spec:
+  limits:
+    - default:
+        cpu: 500m
+        memory: 1Gi
+      defaultRequest:
+        cpu: 100m
+        memory: 256Mi
+      type: Container
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dev-sandbox-admin
+  namespace: vcluster-dev-alice
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dev-alice-admin-binding
+  namespace: vcluster-dev-alice
+subjects:
+  - kind: User
+    name: dev-alice
+    apiGroup: rbac.authorization.k8s.io
+  - kind: ServiceAccount
+    name: dev-alice-sa
+    namespace: vcluster-dev-alice
+roleRef:
+  kind: Role
+  name: dev-sandbox-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dev-alice-sandbox-isolation
+  namespace: vcluster-dev-alice
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow intra-namespace developer traffic
+    - from:
+        - podSelector: {}
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow egress to shared staging data plane (Redpanda, ClickHouse, Postgres)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vat-redpanda
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: vat-storage

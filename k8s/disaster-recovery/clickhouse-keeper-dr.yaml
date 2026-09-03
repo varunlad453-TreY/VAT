@@ -1,0 +1,104 @@
+# ClickHouse 24.3+ Multi-Region Disaster Recovery & Keeper Configuration
+# Configures ReplicatedMergeTree zero-copy replication and multi-region S3 tiered storage
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-dr-storage-config
+  namespace: vat-storage
+  labels:
+    app.kubernetes.io/name: clickhouse-dr-config
+    app.kubernetes.io/part-of: vat-enterprise
+data:
+  dr_storage_policy.xml: |
+    <clickhouse>
+      <storage_configuration>
+        <disks>
+          <!-- Local High-IOPS NVMe / EBS Volume -->
+          <default>
+            <path>/var/lib/clickhouse/</path>
+          </default>
+          <!-- Regional S3 Tiered Storage: Primary (Mumbai ap-south-1) -->
+          <s3_mumbai>
+            <type>s3</type>
+            <endpoint>https://s3.ap-south-1.amazonaws.com/vat-clickhouse-cold-ap-south-1/data/</endpoint>
+            <use_environment_credentials>true</use_environment_credentials>
+            <metadata_path>/var/lib/clickhouse/disks/s3_mumbai/</metadata_path>
+          </s3_mumbai>
+          <!-- Regional S3 Tiered Storage: Standby (Hyderabad ap-south-2) via S3 CRR -->
+          <s3_hyderabad>
+            <type>s3</type>
+            <endpoint>https://s3.ap-south-2.amazonaws.com/vat-clickhouse-cold-ap-south-2/data/</endpoint>
+            <use_environment_credentials>true</use_environment_credentials>
+            <metadata_path>/var/lib/clickhouse/disks/s3_hyderabad/</metadata_path>
+          </s3_hyderabad>
+        </disks>
+        <policies>
+          <multi_region_policy>
+            <volumes>
+              <hot>
+                <disk>default</disk>
+                <max_data_part_size_bytes>10737418240</max_data_part_size_bytes>
+              </hot>
+              <cold>
+                <disk>s3_hyderabad</disk>
+                <perform_ttl_move_on_insert>false</perform_ttl_move_on_insert>
+              </cold>
+            </volumes>
+            <move_factor>0.2</move_factor>
+          </multi_region_policy>
+        </policies>
+      </storage_configuration>
+      <!-- ClickHouse Zero-Copy Replication over Cross-Region Object Store -->
+      <merge_tree>
+        <allow_remote_fs_zero_copy_replication>1</allow_remote_fs_zero_copy_replication>
+        <min_bytes_for_wide_part>10485760</min_bytes_for_wide_part>
+      </merge_tree>
+    </clickhouse>
+
+  keeper_dr_cluster.xml: |
+    <clickhouse>
+      <!-- Cross-Region ClickHouse Keeper Quorum (3 nodes Mumbai, 2 nodes Hyderabad) -->
+      <keeper_server>
+        <tcp_port>9181</tcp_port>
+        <server_id>4</server_id>
+        <log_storage_path>/var/lib/clickhouse-keeper/log</log_storage_path>
+        <snapshot_storage_path>/var/lib/clickhouse-keeper/snapshots</snapshot_storage_path>
+        <coordination_settings>
+          <operation_timeout_ms>10000</operation_timeout_ms>
+          <session_timeout_ms>30000</session_timeout_ms>
+          <raft_logs_level>warning</raft_logs_level>
+          <heart_beat_interval_ms>500</heart_beat_interval_ms>
+          <election_timeout_lower_bound_ms>2000</election_timeout_lower_bound_ms>
+          <election_timeout_upper_bound_ms>4000</election_timeout_upper_bound_ms>
+        </coordination_settings>
+        <raft_configuration>
+          <!-- Mumbai Primary Nodes -->
+          <server>
+            <id>1</id>
+            <hostname>clickhouse-keeper-0.ap-south-1.internal</hostname>
+            <port>9234</port>
+          </server>
+          <server>
+            <id>2</id>
+            <hostname>clickhouse-keeper-1.ap-south-1.internal</hostname>
+            <port>9234</port>
+          </server>
+          <server>
+            <id>3</id>
+            <hostname>clickhouse-keeper-2.ap-south-1.internal</hostname>
+            <port>9234</port>
+          </server>
+          <!-- Hyderabad Standby Nodes -->
+          <server>
+            <id>4</id>
+            <hostname>vat-clickhouse-keeper-0.vat-storage.svc.cluster.local</hostname>
+            <port>9234</port>
+          </server>
+          <server>
+            <id>5</id>
+            <hostname>vat-clickhouse-keeper-1.vat-storage.svc.cluster.local</hostname>
+            <port>9234</port>
+          </server>
+        </raft_configuration>
+      </keeper_server>
+    </clickhouse>

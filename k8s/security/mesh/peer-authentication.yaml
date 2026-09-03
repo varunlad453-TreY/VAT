@@ -1,0 +1,96 @@
+# ==============================================================================
+# Global Mesh-Wide STRICT mTLS Enforcement
+# Any unencrypted plaintext TCP packet inside the cluster is immediately dropped
+# ==============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+  labels:
+    app.kubernetes.io/part-of: vat-enterprise
+    security.istio.io/tls-mode: strict
+spec:
+  mtls:
+    mode: STRICT
+---
+# ==============================================================================
+# Namespace-Specific STRICT mTLS: vat-redpanda (Event Backbone)
+# Enforces mutual TLS with cryptographic SPIFFE X.509 verification on all Kafka/RPC traffic
+# ==============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: redpanda-strict-mtls
+  namespace: vat-redpanda
+  labels:
+    app.kubernetes.io/part-of: vat-enterprise
+    app.kubernetes.io/component: event-backbone
+spec:
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    9092:
+      mode: STRICT
+    33145:
+      mode: STRICT
+    9644:
+      mode: STRICT
+---
+# ==============================================================================
+# Namespace-Specific STRICT mTLS: vat-vector (Ingestion Plane)
+# ==============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: vector-strict-mtls
+  namespace: vat-vector
+  labels:
+    app.kubernetes.io/part-of: vat-enterprise
+    app.kubernetes.io/component: edge-ingestion
+spec:
+  mtls:
+    mode: STRICT
+---
+# ==============================================================================
+# Namespace-Specific STRICT mTLS: vat-embedding (Inference Plane)
+# ==============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: embedding-strict-mtls
+  namespace: vat-embedding
+  labels:
+    app.kubernetes.io/part-of: vat-enterprise
+    app.kubernetes.io/component: inference
+spec:
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    8001:
+      mode: STRICT
+---
+# ==============================================================================
+# Namespace-Specific STRICT mTLS: vat-storage (Data Plane)
+# Locks down PostgreSQL, ClickHouse, and Qdrant to encrypted mTLS only
+# ==============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: storage-strict-mtls
+  namespace: vat-storage
+  labels:
+    app.kubernetes.io/part-of: vat-enterprise
+    app.kubernetes.io/component: storage
+spec:
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    5432:
+      mode: STRICT
+    8123:
+      mode: STRICT
+    9000:
+      mode: STRICT
+    6333:
+      mode: STRICT

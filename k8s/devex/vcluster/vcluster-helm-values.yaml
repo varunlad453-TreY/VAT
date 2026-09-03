@@ -1,0 +1,57 @@
+# Loft vcluster Helm Overrides: Lightweight Virtual Kubernetes Control Plane
+# Release: vcluster
+# Chart: loft/vcluster
+# Architecture: Embedded k3s + SQLite Backend (<200MB memory footprint)
+
+vcluster:
+  image: rancher/k3s:v1.29.2-k3s1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  env:
+    - name: K3S_DATA_DIR
+      value: /data
+
+# Syncer Configuration: Bridges Virtual Pods to Host Worker Nodes Safely
+syncer:
+  extraArgs:
+    - --tls-san=vcluster.dev-sandbox.svc.cluster.local
+  sync:
+    nodes:
+      enabled: false # Do not duplicate host nodes in virtual cluster
+      syncAllNodes: false
+    services:
+      enabled: true
+    ingresses:
+      enabled: true
+    configmaps:
+      enabled: true
+    secrets:
+      enabled: true
+    persistentvolumes:
+      enabled: false
+
+# Storage: Ephemeral SQLite persistence mounted via host emptyDir or PVC
+storage:
+  persistence: true
+  size: 5Gi
+
+# Multi-Tenant Workload Isolation
+isolation:
+  enabled: true
+  podSecurityStandard: baseline
+  resourceQuota:
+    enabled: true
+    quota:
+      requests.cpu: "4"
+      requests.memory: 8Gi
+      limits.cpu: "8"
+      limits.memory: 16Gi
+      count/pods: "20"
+      count/services: "10"
+      count/configmaps: "20"
+      count/secrets: "20"

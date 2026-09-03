@@ -1,0 +1,51 @@
+# Karpenter v0.35+ NodePool: On-Demand Resilient Fleet for Stateful Quorum
+# Pillar: FinOps - Zero Data-Loss SLA Protection (Redpanda, ClickHouse, Postgres, Qdrant)
+apiVersion: karpenter.sh/v1beta1
+kind: NodePool
+metadata:
+  name: ondemand-stateful
+  labels:
+    app.kubernetes.io/name: ondemand-stateful-nodepool
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  template:
+    metadata:
+      labels:
+        karpenter.sh/capacity-type: on-demand
+        vat.enterprise/workload-tier: stateful-core
+    spec:
+      nodeClassRef:
+        name: default-aws-nodeclass
+      taints:
+        - key: vat.enterprise/stateful-only
+          value: "true"
+          effect: NoSchedule
+      requirements:
+        # Guarantee non-interruptible On-Demand capacity
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]
+        # Standardize on high-memory and IOPS-capable enterprise families
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["m6i", "r6i", "m7i"]
+        - key: karpenter.k8s.aws/instance-size
+          operator: In
+          values: ["2xlarge", "4xlarge"]
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        # Enforce strict multi-AZ distribution across all 3 availability zones
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values: ["ap-south-1a", "ap-south-1b", "ap-south-1c"]
+
+  disruption:
+    # Conservative consolidation to preserve storage attaches and persistent volumes
+    consolidationPolicy: WhenEmpty
+    consolidateAfter: 300s
+    expireAfter: 2160h # 90-day maintenance cycle
+
+  limits:
+    cpu: "256"
+    memory: 1024Gi

@@ -1,0 +1,21 @@
+# KEDA TriggerAuthentication: Secure mTLS Authentication for Redpanda Kafka Scaler
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-redpanda-trigger-auth
+  namespace: vat-embedding
+  labels:
+    app.kubernetes.io/name: keda-redpanda-trigger-auth
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  secretTargetRef:
+    # Mutual TLS client certificates provisioned via Istio / Vault dynamic secrets
+    - parameter: ca
+      name: vat-redpanda-client-tls
+      key: ca.crt
+    - parameter: cert
+      name: vat-redpanda-client-tls
+      key: tls.crt
+    - parameter: key
+      name: vat-redpanda-client-tls
+      key: tls.key

@@ -1,0 +1,58 @@
+# PodDisruptionBudgets: Spot Interruption Resilience & High Availability
+# Guarantees quorum and availability during AWS 2-minute Spot Preemption Events
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-embedding-worker
+  namespace: vat-embedding
+  labels:
+    app.kubernetes.io/name: pdb-embedding-worker
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vat-embedding-worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-vector-agent
+  namespace: vat-vector
+  labels:
+    app.kubernetes.io/name: pdb-vector-agent
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vat-vector
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-backend-service
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: pdb-backend-service
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vat-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: pdb-frontend-dashboard
+  namespace: vat-system
+  labels:
+    app.kubernetes.io/name: pdb-frontend-dashboard
+    app.kubernetes.io/part-of: vat-enterprise
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: vat-frontend

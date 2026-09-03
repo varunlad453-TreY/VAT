@@ -1,0 +1,67 @@
+# Redpanda MirrorMaker 2: Cross-Region Streaming Replication
+# Primary: AWS Mumbai (ap-south-1) -> Standby DR: AWS Hyderabad (ap-south-2)
+# Pillar: Multi-Region Disaster Recovery (RPO < 5s, RTO < 60s)
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaMirrorMaker2
+metadata:
+  name: vat-redpanda-dr-mirror
+  namespace: vat-redpanda
+  labels:
+    app.kubernetes.io/name: vat-redpanda-dr-mirror
+    app.kubernetes.io/part-of: vat-enterprise
+    vat.enterprise/dr-role: standby-syncer
+spec:
+  version: 3.7.0
+  replicas: 2
+  connectCluster: "hyderabad-standby"
+  clusters:
+    # 1. Primary Source Cluster (Mumbai ap-south-1 via Inter-Region VPC Peering)
+    - alias: "mumbai-primary"
+      bootstrapServers: "redpanda-primary.ap-south-1.internal:9092"
+      config:
+        security.protocol: SSL
+        ssl.truststore.type: PEM
+      tls:
+        trustedCertificates:
+          - secretName: vat-mumbai-cluster-ca
+            certificate: ca.crt
+    # 2. Standby Target Cluster (Local Hyderabad ap-south-2)
+    - alias: "hyderabad-standby"
+      bootstrapServers: "vat-redpanda-headless.vat-redpanda.svc.cluster.local:9092"
+      config:
+        security.protocol: SSL
+        ssl.truststore.type: PEM
+      tls:
+        trustedCertificates:
+          - secretName: vat-redpanda-client-tls
+            certificate: ca.crt
+  mirrors:
+    - sourceCluster: "mumbai-primary"
+      targetCluster: "hyderabad-standby"
+      sourceConnector:
+        tasksMax: 4
+        config:
+          replication.factor: 3
+          offset-syncs.topic.replication.factor: 3
+          sync.topic.acls.enabled: false
+      checkpointConnector:
+        tasksMax: 2
+        config:
+          checkpoints.topic.replication.factor: 3
+          sync.group.offsets.enabled: true
+          sync.group.offsets.interval.seconds: 5
+          emit.checkpoints.interval.seconds: 5
+      heartbeatConnector:
+        tasksMax: 1
+        config:
+          heartbeats.topic.replication.factor: 3
+          emit.heartbeats.interval.seconds: 5
+      topicsPattern: "vat\\.telemetry\\..*|vat\\.alerts"
+      groupsPattern: "vat-embedding-worker|vat-clickhouse-sink"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi

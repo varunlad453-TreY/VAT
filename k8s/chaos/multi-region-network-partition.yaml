@@ -1,0 +1,35 @@
+# Chaos Mesh: Inter-Region WAN Partition Simulation (Doomsday Fault Injection)
+# Purpose: Simulates a catastrophic WAN network severance between Mumbai (ap-south-1) and Hyderabad (ap-south-2)
+# Verification Target: Route53 DNS cutover < 60s, CNPG standby promotion, zero offset loss
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: inter-region-wan-partition
+  namespace: chaos-mesh
+  labels:
+    app.kubernetes.io/name: inter-region-wan-partition
+    app.kubernetes.io/part-of: vat-enterprise
+    vat.enterprise/test-type: multi-region-dr-drill
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - vat-redpanda
+      - vat-storage
+      - vat-system
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - vat-redpanda
+        - vat-storage
+        - vat-system
+  # Sever cross-region VPC peering and transit gateway routing blocks
+  externalTargets:
+    - "10.0.0.0/16" # Mumbai Primary CIDR Block
+    - "10.1.0.0/16" # Hyderabad Standby CIDR Block
+  duration: "10m"
+  scheduler:
+    cron: "@weekly"
