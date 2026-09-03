@@ -27,7 +27,6 @@ frontend/.env.local
 # Testing, Scripts and Scratch
 .pytest_cache/
 .vscode/
-scripts/
 scratch/
 nul
 
