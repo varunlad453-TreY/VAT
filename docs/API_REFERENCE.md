@@ -1,18 +1,19 @@
-# REST API Reference & Endpoint Specification
+# REST & WebSockets API Reference
 
-**Canonical API Reference for VAT Enterprise Backend**
+**Canonical Specification for VAT Enterprise Backend & Decoupled Microservices**
 
-- **Base URL**: `http://localhost:8000`
+- **FastAPI Core Service**: `http://localhost:8000`
+- **Embedding Worker Microservice**: `http://localhost:8001`
 - **Content-Type**: `application/json`
 - **Interactive Swagger UI**: `http://localhost:8000/docs`
-- **OpenAPI JSON**: `http://localhost:8000/openapi.json`
+- **OpenAPI JSON Specification**: `http://localhost:8000/openapi.json`
 
 ---
 
-## 1. Diagnostic & Troubleshooting Endpoints
+## 1. Diagnostic & Troubleshooting Endpoints (`/troubleshoot`)
 
 ### `POST /troubleshoot`
-Analyzes multi-vendor error telemetry, executes hybrid search against vendor documentation, and generates a structured 4-stage remediation runbook.
+Analyzes multi-vendor error telemetry, queries hybrid vector search for official TAC manual citations, and synthesizes a structured 4-stage remediation runbook with blast radius risk scoring.
 
 #### Request Body
 ```json
@@ -26,11 +27,20 @@ Analyzes multi-vendor error telemetry, executes hybrid search against vendor doc
 }
 ```
 
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `incident_id` | string | No | Optional incident identifier. Auto-generated if omitted. |
+| `device_id` | string | Yes | Hostname or identifier of the impacted network device. |
+| `vendor` | string | No | Vendor hint (`"cisco"`, `"juniper"`, `"velocloud"`, `"arista"`). Auto-detected if omitted. |
+| `protocol` | string | No | Protocol hint (`"bgp"`, `"ospf"`, `"ipsec"`, `"evpn"`, `"interface"`). |
+| `raw_logs` | string | Yes | Raw syslog or error message string. Minimum 1 character. |
+| `context` | object | No | Additional diagnostic context key-value pairs. |
+
 #### Response (200 OK)
 ```json
 {
   "incident_id": "INC-8921",
-  "generated_at": "2026-08-26T12:46:00Z",
+  "generated_at": "2026-09-03T22:50:00Z",
   "vendor": "cisco",
   "protocol": "bgp",
   "diagnosis": "BGP Session Teardown: Router Edge-Router-East lost BGP peering with neighbor 10.10.10.1.",
@@ -90,13 +100,13 @@ Analyzes multi-vendor error telemetry, executes hybrid search against vendor doc
 ---
 
 ### `GET /troubleshoot/sources`
-Retrieves indexed vendor manual chunks matching query, vendor, and protocol filters.
+Queries the indexed vendor documentation corpus matching keyword queries and metadata filters.
 
 #### Query Parameters
-- `query` (string, default: `"BGP neighbor reset hold time expired"`): Search keywords.
-- `vendor` (string, optional): `"cisco"`, `"juniper"`, `"velocloud"`, or `"arista"`.
-- `protocol` (string, optional): `"bgp"`, `"ospf"`, `"ipsec"`, `"evpn"`.
-- `limit` (integer, default: 5, min: 1, max: 20): Maximum citations to return.
+- `query` (string, default: `"BGP neighbor reset hold time expired"`): Search terms.
+- `vendor` (string, optional): Filter by vendor (`"cisco"`, `"juniper"`, `"velocloud"`, `"arista"`).
+- `protocol` (string, optional): Filter by protocol (`"bgp"`, `"ospf"`, `"ipsec"`, `"evpn"`).
+- `limit` (int, default: 5, min: 1, max: 20): Maximum number of citations to return.
 
 #### Response (200 OK)
 ```json
@@ -106,7 +116,7 @@ Retrieves indexed vendor manual chunks matching query, vendor, and protocol filt
     "title": "Troubleshoot Common BGP Issues and Neighbor Reset",
     "vendor": "cisco",
     "similarity_score": 0.98,
-    "excerpt": "BGP neighbor session reset..."
+    "excerpt": "BGP neighbor session reset. Causes: 1. Keepalive packets dropped due to MTU mismatch..."
   }
 ]
 ```
@@ -114,70 +124,70 @@ Retrieves indexed vendor manual chunks matching query, vendor, and protocol filt
 ---
 
 ### `GET /troubleshoot/audit`
-Fetches recent permanent troubleshooting and remediation audit log records from PostgreSQL.
+Retrieves immutable historical troubleshooting executions from PostgreSQL `troubleshooting_audit_ledger`.
 
 #### Query Parameters
-- `limit` (integer, default: 20, min: 1, max: 100): Number of audit records.
-- `vendor` (string, optional): Filter by vendor name.
+- `limit` (int, default: 20, max: 100): Maximum number of records.
+- `device_id` (string, optional): Filter by specific device hostname.
 
 #### Response (200 OK)
 ```json
 [
   {
-    "id": 104,
+    "id": 1,
     "incident_id": "INC-8921",
     "device_id": "Edge-Router-East",
     "vendor": "cisco",
-    "diagnosis": "BGP Session Teardown...",
     "risk_level": "HIGH",
-    "remediation_steps": [...],
-    "rollback_steps": [...],
-    "confidence_score": 0.96,
-    "created_at": "2026-08-26T12:46:00Z"
+    "diagnosis": "BGP Session Teardown",
+    "created_at": "2026-09-03T22:50:00Z"
   }
 ]
 ```
 
 ---
 
-## 2. Telemetry Ingestion Endpoints
+## 2. Telemetry Ingestion Endpoints (`/telemetry`)
 
 ### `POST /telemetry/parse`
-Parses a single raw syslog line and returns normalized event metadata.
+Parses an unstructured syslog string into a normalized `ParsedTelemetry` schema.
 
-#### Query Parameters
-- `raw_log` (string, required): Raw syslog line.
-- `device_hint` (string, optional): Device hostname hint.
+#### Request Body
+```json
+{
+  "raw_log": "RP/0/RSP0/CPU0:Aug 26 12:45:00.123 : bgp[1050]: %ROUTING-BGP-5-ADJCHANGE : neighbor 10.10.10.1 Down",
+  "device_hint": "Router-Agg-01"
+}
+```
 
 #### Response (200 OK)
 ```json
 {
-  "raw_log": "%BGP-5-ADJCHANGE: neighbor 10.10.10.1 Down",
+  "raw_log": "RP/0/RSP0/CPU0:Aug 26 12:45:00.123 : bgp[1050]: %ROUTING-BGP-5-ADJCHANGE : neighbor 10.10.10.1 Down",
   "vendor": "cisco",
-  "device_id": "Core-Router-01",
-  "event_code": "%BGP-5-ADJCHANGE",
+  "device_id": "Router-Agg-01",
+  "event_code": "ROUTING-BGP-5-ADJCHANGE",
   "protocol": "bgp",
   "interface": null,
   "peer_ip": "10.10.10.1",
   "severity": "CRITICAL",
   "category": "routing",
-  "extracted_keywords": ["bgp", "10.10.10.1", "%BGP-5-ADJCHANGE"]
+  "extracted_keywords": ["bgp", "neighbor", "10.10.10.1", "down", "adjchange"]
 }
 ```
 
 ---
 
 ### `POST /telemetry/ingest`
-Ingests a batch of syslog messages with optional automated RAG troubleshooting for actionable errors.
+Batch ingests multiple telemetry entries with automatic RAG diagnostic triggering for high-severity events.
 
 #### Request Body
 ```json
 {
   "logs": [
-    "%BGP-5-ADJCHANGE: neighbor 10.10.10.1 Down - BGP Notification sent, hold time expired",
-    "rpd[1234]: RPD_BGP_NEIGHBOR_STATE_CHANGED: BGP peer 172.16.1.1 changed state to Idle"
+    "%BGP-5-ADJCHANGE: neighbor 10.10.10.1 Down - BGP Notification sent",
+    "Interface GigabitEthernet0/0/1 state changed to up"
   ],
-  "device_hint": "Core-Router-01",
   "auto_troubleshoot": true
 }
 ```
@@ -186,30 +196,107 @@ Ingests a batch of syslog messages with optional automated RAG troubleshooting f
 ```json
 {
   "total_received": 2,
-  "parsed_events": [...],
-  "troubleshooting_reports": [...]
+  "parsed_events": [
+    {
+      "vendor": "cisco",
+      "severity": "CRITICAL",
+      "event_code": "BGP-5-ADJCHANGE",
+      "protocol": "bgp"
+    },
+    {
+      "vendor": "cisco",
+      "severity": "INFO",
+      "event_code": null,
+      "protocol": "interface"
+    }
+  ],
+  "troubleshooting_reports": [
+    {
+      "incident_id": "INC-AUTO-8921",
+      "diagnosis": "BGP Session Teardown",
+      "risk_assessment": { "risk_level": "HIGH" }
+    }
+  ]
 }
 ```
 
 ---
 
-## 3. System & Health Endpoints
+## 3. Real-Time WebSockets Endpoints
+
+### `WS /ws/telemetry`
+Establishes a bi-directional real-time stream of incoming parsed telemetry events.
+- **URL**: `ws://localhost:8000/ws/telemetry`
+- **Protocol**: JSON WebSockets.
+- **Server Push Payload**:
+  ```json
+  {
+    "type": "TELEMETRY_EVENT",
+    "timestamp": "2026-09-03T22:50:00Z",
+    "device_id": "ASR9K-MUMBAI-01",
+    "vendor": "cisco",
+    "severity": "CRITICAL",
+    "event_code": "ROUTING-BGP-5-ADJCHANGE",
+    "protocol": "bgp",
+    "raw_log": "..."
+  }
+  ```
+
+### `WS /ws/troubleshoot`
+Streams granular stage-by-stage progress updates during diagnostic synthesis.
+- **URL**: `ws://localhost:8000/ws/troubleshoot`
+- **Client Trigger**: Send `{"action": "START", "payload": <TroubleshootRequestDTO>}`
+- **Server Stream Messages**:
+  - `{"stage": "PARSING", "progress": 25, "message": "Normalizing vendor syslog tokens..."}`
+  - `{"stage": "RETRIEVAL", "progress": 50, "message": "Executing dense-sparse vector RRF search..."}`
+  - `{"stage": "SYNTHESIS", "progress": 75, "message": "Generating 4-stage playbook & blast radius..."}`
+  - `{"stage": "COMPLETE", "progress": 100, "data": <TroubleshootResponseDTO>}`
+
+---
+
+## 4. Decoupled Embedding Worker API (Port 8001)
+
+### `POST /embed`
+Generates dense vector embeddings for input text batches.
+- **URL**: `http://localhost:8001/embed`
+- **Request Body**:
+  ```json
+  {
+    "texts": ["BGP neighbor reset hold time expired", "OSPF MTU mismatch ExStart"]
+  }
+  ```
+- **Response (200 OK)**:
+  ```json
+  {
+    "embeddings": [
+      [0.0123, -0.0456, ...],
+      [-0.0789, 0.0321, ...]
+    ],
+    "dimensions": 384,
+    "model": "all-MiniLM-L6-v2"
+  }
+  ```
+
+### `GET /metrics`
+Exports Prometheus monitoring metrics:
+- `embedding_requests_total`: Cumulative embedding requests.
+- `embedding_latency_seconds`: Histogram of inference processing latency.
+
+---
+
+## 5. Health & Diagnostic Probes
 
 ### `GET /health`
-Probes service health, version, and PostgreSQL database connectivity.
-
-#### Response (200 OK)
+Returns backend health status, database pool connectivity, and active engine configurations:
 ```json
 {
   "status": "healthy",
-  "service": "vendor-aware-troubleshooter-enterprise",
+  "timestamp": "2026-09-03T22:50:00Z",
   "database_connected": true,
-  "version": "2.0.0",
-  "timestamp": "2026-08-26T12:46:00Z"
+  "vector_dimensions": 384,
+  "version": "2.0.0"
 }
 ```
 
----
-
-### `GET /console`
-Directly serves the high-density NOC console web interface (`index.html`).
+### `GET /`
+Root endpoint returning platform metadata and canonical documentation links.

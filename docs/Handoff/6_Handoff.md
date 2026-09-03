@@ -11,6 +11,9 @@
 - [`4_Handoff.md`](file:///g:/VAT/docs/Handoff/4_Handoff.md) (Tier-1 Carrier NOC Architecture & Phase 1 Foundation Stabilization)
 - [`5_Handoff.md`](file:///g:/VAT/docs/Handoff/5_Handoff.md) (Day 2 Operations: ClickHouse, Redpanda, Chaos Mesh, GitOps & CQRS Cut-Over)
 
+> [!NOTE]
+> **Historical Development Record**: This document is an immutable historical log representing the state and deliverables of this specific development session. For the living, canonical architecture and current codebase status, refer to [README.md](file:///g:/VAT/README.md), [docs/ARCHITECTURE.md](file:///g:/VAT/docs/ARCHITECTURE.md), and [docs/ROADMAP_AND_STATUS.md](file:///g:/VAT/docs/ROADMAP_AND_STATUS.md).
+
 ---
 
 ## 1. Executive Summary & SRE Mandate

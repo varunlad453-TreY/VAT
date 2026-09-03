@@ -9,6 +9,9 @@
 - [`2_Handoff.md`](file:///g:/VAT/docs/Handoff/2_Handoff.md) (Phases 1–5 Architecture, WebSockets, Production Data Integrity)
 - [`3_Handoff.md`](file:///g:/VAT/docs/Handoff/3_Handoff.md) (Frontend Redesign, Containerization, Port Re-Mapping)
 
+> [!NOTE]
+> **Historical Development Record**: This document is an immutable historical log representing the state and deliverables of this specific development session. For the living, canonical architecture and current codebase status, refer to [README.md](file:///g:/VAT/README.md), [docs/ARCHITECTURE.md](file:///g:/VAT/docs/ARCHITECTURE.md), and [docs/ROADMAP_AND_STATUS.md](file:///g:/VAT/docs/ROADMAP_AND_STATUS.md).
+
 ---
 
 ## 1. Executive Summary & Architectural Mission
@@ -98,7 +101,7 @@ This session executed **Phase 1 (Foundation Stabilization)** of the enterprise m
      - `packages/ui`: Shared UI primitives and icons.
      - `packages/typescript-config`: Shared TypeScript compiler configurations.
   3. Implemented Strangler Fig rewrites in [`frontend/next.config.mjs`](file:///g:/VAT/frontend/next.config.mjs) (`/legacy/:path*` $\rightarrow$ `http://localhost:3001/:path*`).
-  4. Created Kubernetes manifests: [`k8s/frontend/deployment.yaml`](file:///g:/VAT/k8s/frontend/deployment.yaml), [`k8s/frontend/service.yaml`](file:///g:/VAT/k8s/frontend/service.yaml), and [`k8s/frontend/ingress.yaml`](file:///g:/VAT/k8s/frontend/ingress.yaml).
+  4. Created Kubernetes manifests: [`k8s/frontend/deployment.yaml`](file:///g:/VAT/k8s/frontend/deployment.yaml), [`k8s/frontend/ingress.yaml`](file:///g:/VAT/k8s/frontend/ingress.yaml), and [`k8s/frontend/ingress.yaml`](file:///g:/VAT/k8s/frontend/ingress.yaml).
 
 ---
 
@@ -145,7 +148,7 @@ This session executed **Phase 1 (Foundation Stabilization)** of the enterprise m
 - [`apps/legacy-console/package.json`](file:///g:/VAT/apps/legacy-console/package.json): Legacy static console workspace.
 - [`frontend/next.config.mjs`](file:///g:/VAT/frontend/next.config.mjs): Strangler Fig reverse proxy rewrites & OpenTelemetry hook.
 - [`k8s/frontend/deployment.yaml`](file:///g:/VAT/k8s/frontend/deployment.yaml): Next.js K8s Deployment.
-- [`k8s/frontend/service.yaml`](file:///g:/VAT/k8s/frontend/service.yaml) & [`ingress.yaml`](file:///g:/VAT/k8s/frontend/ingress.yaml): K8s Service & Ingress.
+- [`k8s/frontend/ingress.yaml`](file:///g:/VAT/k8s/frontend/ingress.yaml) & [`ingress.yaml`](file:///g:/VAT/k8s/frontend/ingress.yaml): K8s Service & Ingress.
 
 ---
 

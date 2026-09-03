@@ -5,7 +5,8 @@
 **Session Author / Role**: Principal Solutions Architect & Lead Developer  
 **Repository**: [https://github.com/varunlad453-TreY/VAT.git](https://github.com/varunlad453-TreY/VAT.git) (`branch: main`, author: `varun`)  
 **Target Environment**: Tier-1 Carrier Network Operations Center (NOC)  
-**Architectural Pattern**: Clean Architecture / Hexagonal Architecture (Ports & Adapters) + Next.js Component Architecture
+> [!NOTE]
+> **Historical Development Record**: This document is an immutable historical log representing the state and deliverables of this specific development session. For the living, canonical architecture and current codebase status, refer to [README.md](file:///g:/VAT/README.md), [docs/ARCHITECTURE.md](file:///g:/VAT/docs/ARCHITECTURE.md), and [docs/ROADMAP_AND_STATUS.md](file:///g:/VAT/docs/ROADMAP_AND_STATUS.md).
 
 ---
 

@@ -1,12 +1,12 @@
 # Hybrid RAG & Vector Search Engine
 
-**Canonical Specification of Dense pgvector & Sparse BM25 Search Mechanics**
+**Canonical Specification of Dense Vector, Sparse BM25 & Qdrant Search Mechanics**
 
 ---
 
 ## 1. Hybrid Search Architecture
 
-VAT uses a **Dense + Sparse Hybrid Retrieval** model to overcome the limitations of pure vector similarity in technical networking contexts.
+VAT uses a **Dense + Sparse Hybrid Retrieval** model with Reciprocal Rank Fusion (RRF) to overcome the limitations of pure vector similarity in technical carrier networking contexts:
 
 ```
                   [ USER QUERY / RAW SYSLOG STRING ]
@@ -16,7 +16,7 @@ VAT uses a **Dense + Sparse Hybrid Retrieval** model to overcome the limitations
       [ DENSE VECTOR PIPELINE ]             [ SPARSE LEXICAL PIPELINE ]
       • Model: all-MiniLM-L6-v2             • Parser: tsvector ('english')
       • 384-dimensional dense float         • Inverted index: GIN
-      • Index: HNSW (vector_cosine_ops)     • Ranking: ts_rank_cd
+      • Engine: Qdrant / pgvector HNSW      • Ranking: ts_rank_cd
       • Weight: 65% (0.65)                  • Weight: 35% (0.35)
                 │                                     │
                 └──────────────────┬──────────────────┘
@@ -31,42 +31,63 @@ VAT uses a **Dense + Sparse Hybrid Retrieval** model to overcome the limitations
 
 ---
 
-## 2. Dense Vector Pipeline (pgvector HNSW)
+## 2. Decoupled GPU Embedding Worker (`services/embedding_service`)
 
-- **Embedding Model**: `all-MiniLM-L6-v2` (via `sentence-transformers`).
-- **Vector Dimension**: `384` floating-point numbers.
-- **Normalization**: Normalized L2 Euclidean distance ($\|\mathbf{v}\| \approx 1.0$).
-- **HNSW Cosine Operator**: `<=>` (Cosine Distance, where similarity is `1 - distance`).
+Dense vector generation is decoupled from the main FastAPI server into a dedicated microservice:
 
-### SQL Dense Component
-```sql
-WITH dense_search AS (
-    SELECT 
-        id, source_url, title, vendor, protocol, chunk_text, 
-        ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) as dense_rank,
-        1 - (embedding <=> $1::vector) AS dense_similarity
-    FROM vendor_knowledge
-    WHERE ($3::text IS NULL OR vendor = $3)
-      AND ($4::text IS NULL OR protocol = $4)
-    LIMIT 20
-)
-```
+- **Location**: `services/embedding_service/main.py`
+- **Network Port**: `8001`
+- **Model**: `all-MiniLM-L6-v2` (via PyTorch & `sentence-transformers`)
+- **Vector Dimension**: `384` floating-point numbers
+- **Normalization**: Normalized L2 Euclidean distance ($\|\mathbf{v}\|_2 \approx 1.0$)
+- **Client Implementation**: `backend/infrastructure/ai/remote_embedding_client.py`
+  - Sends batched POST requests to `http://localhost:8001/embed`.
+  - Automatically handles connection retries and falls back to local in-process generation or deterministic SHA-256 normalized vector hashing if the embedding service is offline.
 
 ---
 
-## 3. Sparse Lexical Pipeline (PostgreSQL tsvector)
+## 3. Dense Vector Storage: Qdrant & PostgreSQL pgvector
 
-In networking telemetry, specific error codes (e.g. `%OSPF-5-ADJCHG`, `%BGP-5-ADJCHANGE`, `EDGE_LINK_DEGRADATION`, `VCMP`, `EXSTART`) must match with exact lexical precision. 
+VAT supports polyglot vector persistence via clean repository interfaces (`IVectorRepository`):
 
-- **Token Storage**: `tsv_content tsvector` column automatically generated on insert.
+### 3.1 Qdrant Vector Repository (`QdrantVectorRepository`)
+- **Collection**: `vat_vendor_knowledge`
+- **Distance Metric**: Cosine Distance
+- **Metadata Filtering**: Filter by `vendor` and `protocol` payloads prior to ANN candidate scoring.
+- **Port**: `6333` (HTTP) / `6334` (gRPC).
+
+### 3.2 PostgreSQL pgvector Repository (`PgVectorRepository`)
+- **Table**: `vendor_knowledge`
+- **Index**: `HNSW (embedding vector_cosine_ops)`
+- **Query Operator**: `<=>` (Cosine Distance, where `similarity = 1 - distance`):
+  ```sql
+  WITH dense_search AS (
+      SELECT 
+          id, source_url, title, vendor, protocol, chunk_text, 
+          ROW_NUMBER() OVER (ORDER BY embedding <=> $1::vector) as dense_rank,
+          1 - (embedding <=> $1::vector) AS dense_similarity
+      FROM vendor_knowledge
+      WHERE ($3::text IS NULL OR vendor = $3)
+        AND ($4::text IS NULL OR protocol = $4)
+      LIMIT 20
+  )
+  ```
+
+---
+
+## 4. Sparse Lexical Pipeline (PostgreSQL tsvector)
+
+In carrier network operations, exact tokens (e.g. `%OSPF-5-ADJCHG`, `%BGP-5-ADJCHANGE`, `EDGE_LINK_DEGRADATION`, `VCMP`, `EXSTART`) require exact lexical matching:
+
+- **Token Storage**: `tsv_content tsvector` column automatically maintained on insert.
 - **Index**: `GIN(tsv_content)` for sub-millisecond keyword lookup.
-- **Ranking Function**: `ts_rank_cd(tsv_content, plainto_tsquery('english', $2))` which penalizes distance between query terms in document chunks.
+- **Ranking Function**: `ts_rank_cd(tsv_content, plainto_tsquery('english', $2))` which measures token frequency and word-distance proximity.
 
 ---
 
-## 4. Documentation Chunking & ETL Specifications
+## 5. Documentation Chunking & ETL Pipeline
 
-The ETL pipeline (`scripts/ingest_vendor_docs.py`) applies the following chunking parameters:
+The ETL pipeline (`backend/scripts/ingest_vendor_docs.py` and `scripts/ingest_vendor_docs.py`) applies standard chunking parameters:
 
 - **Target Chunk Size**: 400 words.
 - **Overlap Window**: 50 words (preserves context across sentence boundaries).
@@ -74,11 +95,12 @@ The ETL pipeline (`scripts/ingest_vendor_docs.py`) applies the following chunkin
 
 ---
 
-## 5. Offline Fallback Corpus (`ENTERPRISE_FALLBACK_CORPUS`)
+## 6. Air-Gapped Resilient Fallback Corpus (`ENTERPRISE_FALLBACK_CORPUS`)
 
-If PostgreSQL or the embedding model is unavailable, `VectorService` executes in-memory deterministic hybrid scoring across pre-indexed vendor troubleshooting trees covering:
-1. Cisco IOS-XR / IOS-XE BGP Hold-Timer Expiry
-2. Cisco IOS-XE OSPF EXSTART MTU Mismatch
-3. Juniper Junos BGP RPD Peer Reset & Idle Timeout
-4. VMware VeloCloud SD-WAN VCMP Overlay Loss & PMTUD Blackhole
-5. Arista EOS EVPN/MLAG Split-Brain Isolation
+If Qdrant, PostgreSQL, or the embedding microservice is offline, `InMemoryVectorRepository` (`backend/infrastructure/repositories/in_memory_repository.py`) executes in-memory deterministic hybrid scoring across pre-indexed vendor troubleshooting trees covering:
+
+1. **Cisco IOS-XR / IOS-XE**: BGP Hold-Timer Expiry & Flapping.
+2. **Cisco IOS-XE**: OSPF EXSTART MTU Mismatch.
+3. **Juniper Junos**: BGP RPD Peer Reset & Idle Timeout.
+4. **VMware VeloCloud**: SD-WAN VCMP Overlay Loss & PMTUD Blackhole.
+5. **Arista EOS**: EVPN / MLAG Split-Brain Peer Isolation.
